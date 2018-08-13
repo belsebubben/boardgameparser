@@ -35,6 +35,8 @@ ALPHAURL = "https://alphaspel.se/491-bradspel/news/?page=%s"
 DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent/strategy"
 EUROGAMESURL = "http://www.eurogames.se/butik/?swoof=1&filter_attribut=butik-sortiment&orderby=date"
 WORLDOFBOARDGAMESURL = "https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori"
+ALLTPAETTKORTURL = "https://www.alltpaettkort.se/butik/?orderby=date"
+ALLTPAETTKORTURLPAGED =  "https://www.alltpaettkort.se/butik/page/%s/?orderby=date"
 
 
 # Alphaspel
@@ -136,6 +138,33 @@ def wordlofboardgamesGamelist():
     return gamelist
 # End Wordlofboardgames
 
+# Alltpaettkort
+def parseAlltpaettkortGames(soup):
+    gamelist = []
+    contenttable = soup.find("ul", {"class": "products"})
+    #print(contenttable)
+    games = contenttable.find_all("h3")
+    for game in games:
+        gamelist.append(game.text.strip())
+    return gamelist
+
+def alltpaettkortGamelist():
+    gamelist = []
+    html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURL)
+    soup = httpbplate.getUrlSoupData(html, charset)
+    gamelist.extend(parseAlltpaettkortGames(soup))
+    for count in ("2", "3", "4"):
+        html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURLPAGED % count)
+        soup = httpbplate.getUrlSoupData(html, charset)
+        gamelist.extend(parseAlltpaettkortGames(soup))
+
+    if debug:
+        print("Allt På Ett Kort gamelist:")
+        for g in gamelist:
+            print(g)
+
+    return gamelist
+# End Allt på ett kort
 
 def matchGamesWithWishes(gamelist, wishlist, storename="Unknown Store"):
     with open(filterlistfile) as flfile:
@@ -189,6 +218,7 @@ def main():
     stores_dict["DragonsLair"] = dragonslairGamelist()
     stores_dict["EuroGames"] = eurogamesGamelist()
     stores_dict["Worldofboardgames"] = wordlofboardgamesGamelist()
+    stores_dict["AlltPaEttkortGames"] = alltpaettkortGamelist()
 
     for k,v in stores_dict.items():
         matchGamesWithWishes(v, wishlist, storename=k)

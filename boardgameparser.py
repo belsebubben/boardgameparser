@@ -1,0 +1,198 @@
+#!/home/carl/.pyvenv3/bin/python
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
+
+
+#pip install python-Levenshtein
+#fuzzywuzzy
+
+import sys
+import os
+import glob
+#sys.path.append("/home/carl/.local_python3/lib/python3.4/site-packages/")
+from bs4 import BeautifulSoup
+from http import cookiejar
+from urllib import parse
+import urllib.request
+import json
+import time
+import re
+import httpbplate
+# from difflib import SequenceMatcher
+from fuzzywuzzy import fuzz
+
+import xml.dom.minidom
+from xml.dom.minidom import Node
+import tempfile
+
+debug = False
+
+filterlistfile = "filterlist"
+WISHURLMUST = "https://www.boardgamegeek.com/xmlapi/collection/carl77?wishlist=1&%20wishlistpriority=1"
+WISHURLLOVE = "https://www.boardgamegeek.com/xmlapi/collection/carl77?wishlist=1&%20wishlistpriority=2"
+WISHURLS = [WISHURLMUST, WISHURLLOVE]
+
+ALPHAURL = "https://alphaspel.se/491-bradspel/news/?page=%s"
+DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent/strategy"
+EUROGAMESURL = "http://www.eurogames.se/butik/?swoof=1&filter_attribut=butik-sortiment&orderby=date"
+WORLDOFBOARDGAMESURL = "https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori"
+
+
+# Alphaspel
+def parseAlphaGames(soup):
+    gamelist = []
+    contenttable = soup.find("div", {"id": "main"})
+    games = contenttable.find_all("div", {"class": "product"})
+    for game in games:
+        gamelist.append(game.find("div", {"class": "product-name"}).text.strip())
+    return gamelist
+
+def alphaGamelist():
+    gamelist = []
+    for i in range(1,5): # iterate over paginated pages of new games
+        html, charset = httpbplate.createHttpRequest(ALPHAURL % i)
+        soup = httpbplate.getUrlSoupData(html, charset)
+        gamelist.extend(parseAlphaGames(soup))
+
+    if debug:
+        print("Alphaspel gamelist:")
+        for g in gamelist:
+            print(g)
+
+    return gamelist
+# End Alphaspel
+
+# Dragons lair
+def parseDragonslairGames(soup):
+    gamelist = []
+    contenttable = soup.find("div", {"id": "product-list"})
+    games = contenttable.find_all("div", {"class": "container"})
+    for game in games:
+        gamelist.append(game.find("a", {"class": "label"}).text.strip())
+    return gamelist
+
+def dragonslairGamelist():
+    gamelist = []
+    html, charset = httpbplate.createHttpRequest(DRAGONSLAIRURL) 
+    soup = httpbplate.getUrlSoupData(html, charset)
+    gamelist.extend(parseDragonslairGames(soup))
+
+    for i in range(2,5): # iterate over paginated pages of new games
+        html, charset = httpbplate.createHttpRequest(DRAGONSLAIRURL + "/%d" % i )
+        soup = httpbplate.getUrlSoupData(html, charset)
+        gamelist.extend(parseDragonslairGames(soup))
+
+    if debug:
+        print("Dragons lair gamelist:")
+        for g in gamelist:
+            print(g)
+
+    return gamelist
+# End Dragons lair
+
+# Eurogames
+def parseEurogamesGames(soup):
+    gamelist = []
+    contenttable = soup.find("ul", {"class": "products columns-3"})
+    games = contenttable.find_all("h2", {"class": "woocommerce-loop-product__title"})
+    for game in games:
+        gamelist.append(game.text.strip())
+    return gamelist
+
+def eurogamesGamelist():
+    gamelist = []
+
+    html, charset = httpbplate.createHttpRequest(EUROGAMESURL)
+    soup = httpbplate.getUrlSoupData(html, charset)
+    gamelist.extend(parseEurogamesGames(soup))
+
+    if debug:
+        print("Eurogames gamelist:")
+        for g in gamelist:
+            print(g)
+
+    return gamelist
+# End Eurogames
+
+# Wordlofboardgames
+def parseWordlofboardgamesGames(soup):
+    gamelist = []
+    games = soup.find_all("div", {"class": "product"})
+    for game in games:
+        gamelist.append(game.findChild("a")["title"])
+    return gamelist
+
+def wordlofboardgamesGamelist():
+    gamelist = []
+    for count in ("", "/40", "/80"):
+        html, charset = httpbplate.createHttpRequest(WORLDOFBOARDGAMESURL % count)
+        soup = httpbplate.getUrlSoupData(html, charset)
+        gamelist.extend(parseWordlofboardgamesGames(soup))
+
+    if debug:
+        print("WorldOfBoardGames gamelist:")
+        for g in gamelist:
+            print(g)
+
+    return gamelist
+# End Wordlofboardgames
+
+
+def matchGamesWithWishes(gamelist, wishlist, storename="Unknown Store"):
+    with open(filterlistfile) as flfile:
+        filterlist = flfile.readlines()
+    
+    for game in gamelist:
+        skip = False
+        for filterentry in filterlist:
+            if fuzz.token_sort_ratio(game, filterentry) > 90:
+                skip = True
+        if skip:
+            continue
+        game = ''.join([c for c in game if c.isalnum() or c.isspace()])
+        for wish in wishlist:
+            wish = ''.join([c for c in wish if c.isalnum() or c.isspace()])
+            #matchRatio = SequenceMatcher(lambda x: x == ' ', game.lower(), wish.lower()).ratio()
+            #matchRatio = SequenceMatcher(None, game.lower(), wish.lower()).ratio()
+            matchRatio = fuzz.token_sort_ratio(game, wish)
+            if matchRatio > 65:
+                print("Match!!!: ", "Game: ", game, "Wish: ", wish, "Storename: ", storename )
+                print("Match ratio: ", matchRatio)
+                print()
+
+def genWishlist():
+    wishes = []
+    for wishurl in WISHURLS:
+
+        xmlresp, charset = httpbplate.createHttpRequest(wishurl)
+        xmlresp = xmlresp.decode(charset or "UTF-8")
+        tempfilename = tempfile.mktemp()
+        with open(tempfilename, "w") as fhw:
+            fhw.write(xmlresp)
+            fhw.close()
+        doc = xml.dom.minidom.parse(tempfilename)
+            
+        for node in doc.getElementsByTagName("item"):
+            name = node.getElementsByTagName("name")
+            wishes.append(name[0].firstChild.data)
+    if debug:
+        print("Wishlist:", wishes)
+
+    return wishes
+
+
+def main():
+    stores_dict = {}
+
+    wishlist = genWishlist()
+
+    stores_dict["Alphaspel"] = alphaGamelist()
+    stores_dict["DragonsLair"] = dragonslairGamelist()
+    stores_dict["EuroGames"] = eurogamesGamelist()
+    stores_dict["Worldofboardgames"] = wordlofboardgamesGamelist()
+
+    for k,v in stores_dict.items():
+        matchGamesWithWishes(v, wishlist, storename=k)
+
+if __name__ == "__main__":
+    main()
+

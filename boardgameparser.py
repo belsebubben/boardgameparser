@@ -1,21 +1,17 @@
 #!/home/carl/.pyvenv3/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
-
 #pip install python-Levenshtein
 #fuzzywuzzy
 
 import sys
 import os
-import glob
+import collections
 #sys.path.append("/home/carl/.local_python3/lib/python3.4/site-packages/")
 from bs4 import BeautifulSoup
-from http import cookiejar
 from urllib import parse
 import urllib.request
-import json
 import time
-import re
 import httpbplate
 # from difflib import SequenceMatcher
 from fuzzywuzzy import fuzz
@@ -39,16 +35,18 @@ ALLTPAETTKORTURL = "https://www.alltpaettkort.se/butik/?orderby=date"
 ALLTPAETTKORTURLPAGED =  "https://www.alltpaettkort.se/butik/page/%s/?orderby=date"
 
 
+GameItem = collections.namedtuple('GameItem', 'name, stock, price')
+
 # Alphaspel
 def parseAlphaGames(soup):
     gamelist = []
     contenttable = soup.find("div", {"id": "main"})
     games = contenttable.find_all("div", {"class": "product"})
     for game in games:
-        gamelist.append(game.find("div", {"class": "product-name"}).text.strip())
-        #stock = "slut" not in game.find("div", {"class": "stock"}).text.strip()) 
-        stock = not any(game.find("div", {"class": "stock"}).text.strip().lower() for word in ("slut", "kommande"))
-        print("Stock:", stock)
+        name = game.find("div", {"class": "product-name"}).text.strip()
+        stock = not any(word in game.find("div", {"class": "stock"}).text.strip().lower() for word in ("slut", "kommande"))
+        game = GameItem(name=name, stock=stock, price="")
+        gamelist.append(game)
     return gamelist
 
 def alphaGamelist():
@@ -72,7 +70,11 @@ def parseDragonslairGames(soup):
     contenttable = soup.find("div", {"id": "product-list"})
     games = contenttable.find_all("div", {"class": "container"})
     for game in games:
-        gamelist.append(game.find("a", {"class": "label"}).text.strip())
+        name = game.find("a", {"class": "label"}).text.strip()
+        stock = "I lager: Ja" in game.find("div", {"class": "controls"}).text.strip()
+        price = game.find("span", {"class": "price"}).text.strip() or None # !!!!!!!!!!!!!!!!!!!!! price
+        game = GameItem(name=name, stock=stock, price=price)
+        gamelist.append(game)
     return gamelist
 
 def dragonslairGamelist():
@@ -98,9 +100,14 @@ def dragonslairGamelist():
 def parseEurogamesGames(soup):
     gamelist = []
     contenttable = soup.find("ul", {"class": "products columns-3"})
-    games = contenttable.find_all("h2", {"class": "woocommerce-loop-product__title"})
+    #games = contenttable.find_all("h2", {"class": "woocommerce-loop-product__title"})
+    games = contenttable.find_all("li", None)
     for game in games:
-        gamelist.append(game.text.strip())
+        name = game.find("h2", {"class": "woocommerce-loop-product__title"}).text.strip()
+        stock = game.find("a", {"class": "button product_type_simple ajax_add_to_cart"}) == None
+        price = game.find("span", {"class": "woocommerce-Price-amount amount"}).text.strip()
+        game = GameItem(name=name, stock=stock, price=price)
+        gamelist.append(game)
     return gamelist
 
 def eurogamesGamelist():
@@ -123,7 +130,14 @@ def parseWordlofboardgamesGames(soup):
     gamelist = []
     games = soup.find_all("div", {"class": "product"})
     for game in games:
-        gamelist.append(game.findChild("a")["title"])
+        name = game.findChild("a")["title"]
+        try:
+            price = game.find("div", {"class": "xlarge"}).next_element.next_element
+        except:
+            price = None
+        stock = game.find("a", {"class": "button green buttonshadow saveScrollPostion"}) is not None
+        game = GameItem(name=name, stock=stock, price=price)
+        gamelist.append(game)
     return gamelist
 
 def wordlofboardgamesGamelist():
@@ -176,16 +190,18 @@ def matchGamesWithWishes(gamelist, wishlist, storename="Unknown Store"):
     for game in gamelist:
         skip = False
         for filterentry in filterlist:
-            if fuzz.token_sort_ratio(game, filterentry) > 90:
+            if fuzz.token_sort_ratio(game.name, filterentry) > 90:
                 skip = True
         if skip:
             continue
-        game = ''.join([c for c in game if c.isalnum() or c.isspace()])
+        name = ''.join([c for c in game.name if c.isalnum() or c.isspace()])
         for wish in wishlist:
+            if debug:
+                print("Matching: ", wish, "with: ", game.name)
             wish = ''.join([c for c in wish if c.isalnum() or c.isspace()])
             #matchRatio = SequenceMatcher(lambda x: x == ' ', game.lower(), wish.lower()).ratio()
             #matchRatio = SequenceMatcher(None, game.lower(), wish.lower()).ratio()
-            matchRatio = fuzz.token_sort_ratio(game, wish)
+            matchRatio = fuzz.token_sort_ratio(game.name, wish)
             if matchRatio > 65:
                 print("Match!!!: ", "Game: ", game, "Wish: ", wish, "Storename: ", storename )
                 print("Match ratio: ", matchRatio)
@@ -221,7 +237,7 @@ def main():
     stores_dict["DragonsLair"] = dragonslairGamelist()
     stores_dict["EuroGames"] = eurogamesGamelist()
     stores_dict["Worldofboardgames"] = wordlofboardgamesGamelist()
-    stores_dict["AlltPaEttkortGames"] = alltpaettkortGamelist()
+    #stores_dict["AlltPaEttkortGames"] = alltpaettkortGamelist()
 
     for k,v in stores_dict.items():
         matchGamesWithWishes(v, wishlist, storename=k)

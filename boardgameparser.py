@@ -46,6 +46,9 @@ def parseAlphaGames(soup):
     games = contenttable.find_all("div", {"class": "product"})
     for game in games:
         gamelist.append(game.find("div", {"class": "product-name"}).text.strip())
+        #stock = "slut" not in game.find("div", {"class": "stock"}).text.strip()) 
+        stock = not any(game.find("div", {"class": "stock"}).text.strip().lower() for word in ("slut", "kommande"))
+        print("Stock:", stock)
     return gamelist
 
 def alphaGamelist():

@@ -4,6 +4,12 @@
 #pip install python-Levenshtein
 #fuzzywuzzy
 
+# Selenium firefox geckodriver
+# https://github.com/mozilla/geckodriver/releases
+
+#wget "https://github.com/mozilla/geckodriver/releases/download/v0.21.0/geckodriver-v0.21.0-linux64.tar.gz" -O /tmp/geckodriver.tar.gz && tar -C /opt -xzf /tmp/geckodriver.tar.gz && chmod 755 /opt/geckodriver && ln -fs /opt/geckodriver /usr/bin/geckodriver && ln -fs /opt/geckodriver /usr/local/bin/geckodriver
+
+
 import sys
 import os
 import collections
@@ -20,6 +26,12 @@ import xml.dom.minidom
 from xml.dom.minidom import Node
 import tempfile
 
+# Selenium
+import selenium
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+
+
 debug = False
 
 filterlistfile = "filterlist"
@@ -33,9 +45,80 @@ EUROGAMESURL = "http://www.eurogames.se/butik/?swoof=1&filter_attribut=butik-sor
 WORLDOFBOARDGAMESURL = "https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori"
 ALLTPAETTKORTURL = "https://www.alltpaettkort.se/butik/?orderby=date"
 ALLTPAETTKORTURLPAGED =  "https://www.alltpaettkort.se/butik/page/%s/?orderby=date"
+WEBHALLENURL = "https://www.webhallen.com/se/category/3777-Bradspel?f=stock%5E0&page=1&sort=latest"
 
 
 GameItem = collections.namedtuple('GameItem', 'name, stock, price')
+
+# Webhallen
+
+def parseWebhallenGames(soup):
+    # div.product-list-page:nth-child(1)
+    # div.col-sm-6:nth-child(1)
+    # div class="panel mb-4 panel-thin-blue product-grid-item"
+    # div.col-md-4:nth-child(3)
+    gamelist = []
+    #contenttable = soup.find("div", {"class": "product-list-page"})
+    #print("contenttable", contenttable.__dict__)
+    games = soup.find_all("div", {"class": "col-md-4 col-sm-6 col-xs-6"})
+    for game in games:
+        name = game.find("span", {"class": "fixed-lines"}).next_element.strip()
+        price = game.find("div", {"class": "relative d-block price"})
+        campaign = price.find("span", {"class": "_campaign price-value _right"})
+        if campaign is not None:
+            print("Price: ", price.__dict__)
+            print("Campaign:", campaign.__dict__)
+            print()
+            print("_" * 70)
+        campaign = None
+        # html body div#app div div#site-container.d-sm-flex.flex-column.align-items-end.container.px-0 main.container.relative.pb-5.section-7 div.row div.main-col.col-sm-12.col-lg-8.col-md-9.pl-0-lg.pr-0-md div#main-container.main-container article.category.child-view div.product-browser div.mt-4 div.product-list-page div.col-md-4.col-sm-6.col-xs-6 div.panel.mb-4.panel-thin-blue.product-grid-item div.panel-body.p-4 div.panel-bottom.ap-br.mr-4.mb-0 div.relative.d-block.price span._campaign.price-value._right
+
+        game = GameItem(name=name, stock=True, price="100")
+        gamelist.append(game)
+    return gamelist
+
+def webhallenGamelist():
+    gamelist = []
+    options = Options()
+    options.add_argument("--headless")
+    driver = webdriver.Firefox
+    driver = webdriver.Firefox(firefox_options=options)
+    driver.get(WEBHALLENURL)
+    driver.implicitly_wait(3)
+
+    # scroller
+    SCROLL_PAUSE_TIME = 0.1
+
+    # Get scroll height
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    scrolled = 0
+    while scrolled < 14:
+        # Scroll down to bottom
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+        # Wait to load page
+        time.sleep(SCROLL_PAUSE_TIME)
+
+        # Calculate new scroll height and compare with last scroll height
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+        scrolled += 1
+        if debug:
+            print("scroll: ", scrolled)
+
+        html = driver.page_source
+        html = html.encode("UTF-8")
+        soup = httpbplate.getUrlSoupData(html, "UTF-8")
+        gamelist.extend(parseWebhallenGames(soup))
+
+    for game in gamelist:
+        print(game)
+
+    driver.close()
+    #print(html)
+
 
 # Alphaspel
 def parseAlphaGames(soup):
@@ -233,14 +316,15 @@ def main():
 
     wishlist = genWishlist()
 
-    stores_dict["Alphaspel"] = alphaGamelist()
-    stores_dict["DragonsLair"] = dragonslairGamelist()
-    stores_dict["EuroGames"] = eurogamesGamelist()
-    stores_dict["Worldofboardgames"] = wordlofboardgamesGamelist()
+    stores_dict["Webhallen"] = webhallenGamelist()
+#    stores_dict["Alphaspel"] = alphaGamelist()
+#    stores_dict["DragonsLair"] = dragonslairGamelist()
+#    stores_dict["EuroGames"] = eurogamesGamelist()
+#    stores_dict["Worldofboardgames"] = wordlofboardgamesGamelist()
     #stores_dict["AlltPaEttkortGames"] = alltpaettkortGamelist()
 
-    for k,v in stores_dict.items():
-        matchGamesWithWishes(v, wishlist, storename=k)
+#    for k,v in stores_dict.items():
+#        matchGamesWithWishes(v, wishlist, storename=k)
 
 if __name__ == "__main__":
     main()

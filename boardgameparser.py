@@ -64,13 +64,16 @@ def parseWebhallenGames(soup):
     for game in games:
         name = game.find("span", {"class": "fixed-lines"}).next_element.strip()
         price = game.find("div", {"class": "relative d-block price"})
-        campaign = price.find("span", {"class": "_campaign price-value _right"})
-        if campaign is not None:
-            print("Price: ", price.__dict__)
-            print("Campaign:", campaign.__dict__)
-            print()
-            print("_" * 70)
-        campaign = None
+        campaign = price.find("span", {"class": "price-value _regular"})
+        if campaign:
+            print("campaign:!!!")
+            print(price.__dict__)
+            campaign = None
+        for p in price:
+            print("moo:", p)
+            print("mootext:", p.text)
+            print("CCCC:", p.sibling)
+        print("_" * 70)
         # html body div#app div div#site-container.d-sm-flex.flex-column.align-items-end.container.px-0 main.container.relative.pb-5.section-7 div.row div.main-col.col-sm-12.col-lg-8.col-md-9.pl-0-lg.pr-0-md div#main-container.main-container article.category.child-view div.product-browser div.mt-4 div.product-list-page div.col-md-4.col-sm-6.col-xs-6 div.panel.mb-4.panel-thin-blue.product-grid-item div.panel-body.p-4 div.panel-bottom.ap-br.mr-4.mb-0 div.relative.d-block.price span._campaign.price-value._right
 
         game = GameItem(name=name, stock=True, price="100")

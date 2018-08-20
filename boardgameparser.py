@@ -53,31 +53,27 @@ GameItem = collections.namedtuple('GameItem', 'name, stock, price')
 # Webhallen
 
 def parseWebhallenGames(soup):
-    # div.product-list-page:nth-child(1)
-    # div.col-sm-6:nth-child(1)
-    # div class="panel mb-4 panel-thin-blue product-grid-item"
-    # div.col-md-4:nth-child(3)
     gamelist = []
-    #contenttable = soup.find("div", {"class": "product-list-page"})
-    #print("contenttable", contenttable.__dict__)
     games = soup.find_all("div", {"class": "col-md-4 col-sm-6 col-xs-6"})
     for game in games:
         name = game.find("span", {"class": "fixed-lines"}).next_element.strip()
         price = game.find("div", {"class": "relative d-block price"})
         campaign = price.find("span", {"class": "price-value _regular"})
         if campaign:
-            print("campaign:!!!")
-            print(price.__dict__)
+            if debug:
+                print("webhallen campaign:!!!")
+                print(price.__dict__)
+                print("Campaignprice!! : ", price.text.split("\n")[3].strip())
+            price = price.text.split("\n")[3].strip()
             campaign = None
-        for p in price:
-            print("moo:", p)
-            print("mootext:", p.text)
-            print("CCCC:", p.sibling)
-        print("_" * 70)
-        # html body div#app div div#site-container.d-sm-flex.flex-column.align-items-end.container.px-0 main.container.relative.pb-5.section-7 div.row div.main-col.col-sm-12.col-lg-8.col-md-9.pl-0-lg.pr-0-md div#main-container.main-container article.category.child-view div.product-browser div.mt-4 div.product-list-page div.col-md-4.col-sm-6.col-xs-6 div.panel.mb-4.panel-thin-blue.product-grid-item div.panel-body.p-4 div.panel-bottom.ap-br.mr-4.mb-0 div.relative.d-block.price span._campaign.price-value._right
+        else:
+            price = price.find("span", {"class": "price-value _right"}).text.strip()
+        price = price.replace(u"\xa0", u"").replace("kr", "")
 
-        game = GameItem(name=name, stock=True, price="100")
+        game = GameItem(name=name, stock=True, price=price)
         gamelist.append(game)
+        if debug:
+            print(game)
     return gamelist
 
 def webhallenGamelist():
@@ -90,7 +86,7 @@ def webhallenGamelist():
     driver.implicitly_wait(3)
 
     # scroller
-    SCROLL_PAUSE_TIME = 0.1
+    SCROLL_PAUSE_TIME = 0.2
 
     # Get scroll height
     last_height = driver.execute_script("return document.body.scrollHeight")
@@ -115,12 +111,11 @@ def webhallenGamelist():
         html = html.encode("UTF-8")
         soup = httpbplate.getUrlSoupData(html, "UTF-8")
         gamelist.extend(parseWebhallenGames(soup))
+        if debug:
+            print(html)
 
-    for game in gamelist:
-        print(game)
 
     driver.close()
-    #print(html)
 
 
 # Alphaspel
@@ -272,26 +267,31 @@ def alltpaettkortGamelist():
 def matchGamesWithWishes(gamelist, wishlist, storename="Unknown Store"):
     with open(filterlistfile) as flfile:
         filterlist = flfile.readlines()
+
+    try:
     
-    for game in gamelist:
-        skip = False
-        for filterentry in filterlist:
-            if fuzz.token_sort_ratio(game.name, filterentry) > 90:
-                skip = True
-        if skip:
-            continue
-        name = ''.join([c for c in game.name if c.isalnum() or c.isspace()])
-        for wish in wishlist:
-            if debug:
-                print("Matching: ", wish, "with: ", game.name)
-            wish = ''.join([c for c in wish if c.isalnum() or c.isspace()])
-            #matchRatio = SequenceMatcher(lambda x: x == ' ', game.lower(), wish.lower()).ratio()
-            #matchRatio = SequenceMatcher(None, game.lower(), wish.lower()).ratio()
-            matchRatio = fuzz.token_sort_ratio(game.name, wish)
-            if matchRatio > 65:
-                print("Match!!!: ", "Game: ", game, "Wish: ", wish, "Storename: ", storename )
-                print("Match ratio: ", matchRatio)
-                print()
+        for game in gamelist:
+            skip = False
+            for filterentry in filterlist:
+                if fuzz.token_sort_ratio(game.name, filterentry) > 90:
+                    skip = True
+            if skip:
+                continue
+            name = ''.join([c for c in game.name if c.isalnum() or c.isspace()])
+            for wish in wishlist:
+                if debug:
+                    print("Matching: ", wish, "with: ", game.name)
+                wish = ''.join([c for c in wish if c.isalnum() or c.isspace()])
+                #matchRatio = SequenceMatcher(lambda x: x == ' ', game.lower(), wish.lower()).ratio()
+                #matchRatio = SequenceMatcher(None, game.lower(), wish.lower()).ratio()
+                matchRatio = fuzz.token_sort_ratio(game.name, wish)
+                if matchRatio > 65:
+                    print("Match!!!: ", "Game: ", game, "Wish: ", wish, "Storename: ", storename )
+                    print("Match ratio: ", matchRatio)
+                    print()
+    except:
+        print("Store", storename,  "Gamelist", gamelist)
+        print(sys.exc_info())
 
 def genWishlist():
     wishes = []
@@ -320,14 +320,14 @@ def main():
     wishlist = genWishlist()
 
     stores_dict["Webhallen"] = webhallenGamelist()
-#    stores_dict["Alphaspel"] = alphaGamelist()
-#    stores_dict["DragonsLair"] = dragonslairGamelist()
-#    stores_dict["EuroGames"] = eurogamesGamelist()
-#    stores_dict["Worldofboardgames"] = wordlofboardgamesGamelist()
-    #stores_dict["AlltPaEttkortGames"] = alltpaettkortGamelist()
+    stores_dict["Alphaspel"] = alphaGamelist()
+    stores_dict["DragonsLair"] = dragonslairGamelist()
+    stores_dict["EuroGames"] = eurogamesGamelist()
+    stores_dict["Worldofboardgames"] = wordlofboardgamesGamelist()
+    stores_dict["AlltPaEttkortGames"] = alltpaettkortGamelist()
 
-#    for k,v in stores_dict.items():
-#        matchGamesWithWishes(v, wishlist, storename=k)
+    for k,v in stores_dict.items():
+        matchGamesWithWishes(v, wishlist, storename=k)
 
 if __name__ == "__main__":
     main()

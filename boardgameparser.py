@@ -116,6 +116,7 @@ def webhallenGamelist():
 
 
     driver.close()
+    return gamelist
 
 
 # Alphaspel
@@ -241,9 +242,17 @@ def parseAlltpaettkortGames(soup):
     gamelist = []
     contenttable = soup.find("ul", {"class": "products"})
     #print(contenttable)
-    games = contenttable.find_all("h3")
+    games = contenttable.find_all("li", {"class": lambda L: L and L.find('post') > -1 })
+    if debug:
+        print("Allt På Ett Kort gamelist:")
     for game in games:
-        gamelist.append(game.text.strip())
+        name = game.find("h3").text
+        price = game.find("span", {"class": "price"}).text.replace("kr", "" ).replace(",", "").strip()
+        stock = game.find("a", {"class": "button add_to_cart_button product_type_simple"}) is not None
+        game = GameItem(name=name, stock=stock, price=price)
+        gamelist.append(game)
+        if debug:
+            print(game)
     return gamelist
 
 def alltpaettkortGamelist():
@@ -255,12 +264,6 @@ def alltpaettkortGamelist():
         html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURLPAGED % count)
         soup = httpbplate.getUrlSoupData(html, charset)
         gamelist.extend(parseAlltpaettkortGames(soup))
-
-    if debug:
-        print("Allt På Ett Kort gamelist:")
-        for g in gamelist:
-            print(g)
-
     return gamelist
 # End Allt på ett kort
 
@@ -314,6 +317,7 @@ def genWishlist():
     return wishes
 
 
+# Stores todo (retrospelbutiken, midgård games, storochliten, http://www.unispel.com, playoteket, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
 def main():
     stores_dict = {}
 

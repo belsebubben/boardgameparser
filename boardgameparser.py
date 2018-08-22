@@ -46,6 +46,8 @@ WORLDOFBOARDGAMESURL = "https://www.worldofboardgames.com/strategispel/nya_produ
 ALLTPAETTKORTURL = "https://www.alltpaettkort.se/butik/?orderby=date"
 ALLTPAETTKORTURLPAGED =  "https://www.alltpaettkort.se/butik/page/%s/?orderby=date"
 WEBHALLENURL = "https://www.webhallen.com/se/category/3777-Bradspel?f=stock%5E0&page=1&sort=latest"
+RETROSPELBUTIKEN = "http://retrospelbutiken.se/store/category.php?category=190"
+RETROSPELBUTIKENPAGED = "http://retrospelbutiken.se/store/category.php?category=190&page=%s&sort=0"
 
 
 GameItem = collections.namedtuple('GameItem', 'name, stock, price')
@@ -267,6 +269,48 @@ def alltpaettkortGamelist():
     return gamelist
 # End Allt på ett kort
 
+# Retrospelbutiken
+def parseRetrospelButiken(soup):
+    gamelist = []
+    # find all <td> tags that contain string "brädspel"
+    bgtds = [ td for td in soup.find_all("td") if "brädspel" in td.text.lower() ]
+    if debug:
+        print("Retrospelsbutiken game parsing")
+    for bgtd in bgtds:
+        try:
+            trparent = bgtd.find_parent("tr")
+            prevtr = trparent.find_previous("tr")
+            prevtr2 = prevtr.find_previous("tr")
+            psibs = bgtd.find_previous_siblings("td")
+            #nsibs =  bgtds[10].find_next_siblings("td")
+            print()
+            name = prevtr2.find_all("td")[len(psibs)].text
+            price = bgtd.find("b").text
+            stock = "i lager" in  bgtd.text.lower()
+        except:
+            print(sys.exc_info())
+        game = GameItem(name=name, stock=stock, price=price)
+        if debug:
+            print(game)
+        gamelist.append(game)
+    return gamelist
+
+def retrospelbutikenGamelist():
+    gamelist = []
+    html, charset = httpbplate.createHttpRequest(RETROSPELBUTIKEN)
+    soup = httpbplate.getUrlSoupData(html, charset)
+    #sides = soup.find(string="Nästa Sida >")
+    #print("SIDESSS;", sides.parent.parent.find_all("a")[1].text)
+
+    gamelist.extend(parseAlltpaettkortGames(soup))
+    for count in ("2", "3", "4"):
+        html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURLPAGED % count)
+        soup = httpbplate.getUrlSoupData(html, charset)
+        gamelist.extend(parseAlltpaettkortGames(soup))
+    return gamelist
+# End Retrospelbutiken
+
+
 def matchGamesWithWishes(gamelist, wishlist, storename="Unknown Store"):
     with open(filterlistfile) as flfile:
         filterlist = flfile.readlines()
@@ -317,7 +361,7 @@ def genWishlist():
     return wishes
 
 
-# Stores todo (retrospelbutiken, midgård games, storochliten, http://www.unispel.com, playoteket, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
+# Stores todo (4-games.se, retrospelbutiken, midgård games, storochliten, http://www.unispel.com, playoteket, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
 def main():
     stores_dict = {}
 

@@ -1,3 +1,6 @@
 filterlist
 __pycache__
 httpbplate.py
+geckodriver.log
+tmp/*
+tmp

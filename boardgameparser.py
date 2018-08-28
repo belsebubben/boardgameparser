@@ -22,9 +22,20 @@ import httpbplate
 # from difflib import SequenceMatcher
 from fuzzywuzzy import fuzz
 
+# xml
 import xml.dom.minidom
 from xml.dom.minidom import Node
 import tempfile
+
+# sqlalchemy
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, relation, backref
+from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, text, UniqueConstraint
+from sqlalchemy.types import *
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.exc import IntegrityError, DBAPIError, DataError
+from sqlalchemy.orm.exc import NoResultFound
+
 
 # Selenium
 import selenium
@@ -62,8 +73,31 @@ RETROSPELBUTIKENPAGED = "http://retrospelbutiken.se/store/category.php?category=
 PLAYOTEKETURL = "https://www.playoteket.com/strategi?orderby=quantity&orderway=desc"
 PLAYOTEKETURLPAGED = "https://www.playoteket.com/strategi?orderby=quantity&orderway=desc&p=%s"
 
-
 GameItem = collections.namedtuple('GameItem', 'name, stock, price')
+
+
+# Database stuff
+#DBFILEPATH = "boardgames.db"
+#engine = create_engine('sqlite:///%s' % DBFILEPATH )
+#Base.metadata.create_all(engine)
+#Base = declarative_base()
+#
+## game, wishlist, shop
+#
+#class Game(Base):
+#    __tablename__ = 'game'
+#    id = Column(Integer, primary_key=True)
+#    game_name = Column(String(250), nullable=False)
+#
+#class Shop(Base):
+#    __tablename__ = 'shop'
+#    id = Column(Integer, primary_key=True)
+#    company_name = Column(String(250))
+#
+#class GameProduct(Base):
+#    game_id = Column(Integer, ForeignKey('game.id'))
+#    shop_id = Column(Integer, ForeignKey('shop.id'))
+## end Database stuff
 
 # Webhallen
 
@@ -85,7 +119,7 @@ def parseWebhallenGames(soup):
 
         game = GameItem(name=name, stock=True, price=price)
         gamelist.append(game)
-        logger.debug("webhallen game %s" % game)
+        logger.debug("webhallen game %s" % str(game))
     return gamelist
 
 def webhallenGamelist():
@@ -266,7 +300,7 @@ def parseAlltpaettkortGames(soup):
             gamelist.append(game)
             logger.debug(game)
         except:
-            print(sys.exc_info())
+            logger.debug(sys.exc_info())
     return gamelist
 
 def alltpaettkortGamelist():
@@ -373,15 +407,14 @@ def matchGamesWithWishes(gamelist, wishlist, storename="Unknown Store"):
                     skip = True
             if skip:
                 continue
-            name = ''.join([c for c in game.name if c.isalnum() or c.isspace()])
+            name = ''.join([c for c in game.name if c.isalnum() or c.isspace()]).lower()
             for wish in wishlist:
-                if debug:
-                    print("Matching: ", wish, "with: ", game.name)
-                wish = ''.join([c for c in wish if c.isalnum() or c.isspace()])
+                logger.debug("Matching: ", wish, "with: ", game.name)
+                wish = ''.join([c for c in wish if c.isalnum() or c.isspace()]).lower()
                 #matchRatio = SequenceMatcher(lambda x: x == ' ', game.lower(), wish.lower()).ratio()
                 #matchRatio = SequenceMatcher(None, game.lower(), wish.lower()).ratio()
                 matchRatio = fuzz.token_sort_ratio(game.name, wish)
-                if matchRatio > 65:
+                if (matchRatio > 65 and len(name.split(" ")) > 1) or (matchRatio > 81 and len(name.split(" ")) == 1) :
                     print("Match!!!: ", "Game: ", game, "Wish: ", wish, "Storename: ", storename )
                     print("Match ratio: ", matchRatio)
                     print()

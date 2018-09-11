@@ -27,15 +27,15 @@ import xml.dom.minidom
 from xml.dom.minidom import Node
 import tempfile
 
-# sqlalchemy
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, relation, backref
-from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey, text, UniqueConstraint
-from sqlalchemy.types import *
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.exc import IntegrityError, DBAPIError, DataError
-from sqlalchemy.orm.exc import NoResultFound
-
+# django
+#django settings
+import django
+sys.path.append("/home/carl/Code/boardgameparser")
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bgindex.settings')
+from django.core.wsgi import get_wsgi_application
+django.setup()
+#end django settings
+from bgs.models import *
 
 # Selenium
 import selenium
@@ -75,32 +75,12 @@ PLAYOTEKETURLPAGED = "https://www.playoteket.com/strategi?orderby=quantity&order
 
 GameItem = collections.namedtuple('GameItem', 'name, stock, price')
 
-
 # Database stuff
-#DBFILEPATH = "boardgames.db"
-#engine = create_engine('sqlite:///%s' % DBFILEPATH )
-#Base.metadata.create_all(engine)
-#Base = declarative_base()
-#
-## game, wishlist, shop
-#
-#class Game(Base):
-#    __tablename__ = 'game'
-#    id = Column(Integer, primary_key=True)
-#    game_name = Column(String(250), nullable=False)
-#
-#class Shop(Base):
-#    __tablename__ = 'shop'
-#    id = Column(Integer, primary_key=True)
-#    company_name = Column(String(250))
-#
-#class GameProduct(Base):
-#    game_id = Column(Integer, ForeignKey('game.id'))
-#    shop_id = Column(Integer, ForeignKey('shop.id'))
-## end Database stuff
+# game, wishlist, shop
+
+# end Database stuff
 
 # Webhallen
-
 def parseWebhallenGames(soup):
     gamelist = []
     games = soup.find_all("div", {"class": "col-md-4 col-sm-6 col-xs-6"})
@@ -374,7 +354,7 @@ def parsePlayoteket(soup):
         except:
             logger.error("Failed parsing for playoteket: %s", sys.exc_info())
         if debug:
-            logger.debug(game.prettify())
+            logger.debug(game.prettify)
     return gamelist
 
 def playoteketGamelist():
@@ -436,31 +416,51 @@ def genWishlist():
             
         for node in doc.getElementsByTagName("item"):
             name = node.getElementsByTagName("name")
-            wishes.append(name[0].firstChild.data)
-    if debug:
-        logger.debug("Wishlist: %s" % wishes)
+            priority = node.getElementsByTagName("status")[0].attributes["wishlistpriority"].value
+            wishname = name[0].firstChild.data
+            wishes.append(wishname)
+            wishes.append(wishname)
+            w = Wishlist(name=wishname, priority=priority)
+            w.save()
+    logger.debug("Wishlist: %s" % wishes)
 
     return wishes
 
 
-# Stores todo ( playoteket, 4-games.se, midgård games, storochliten, http://www.unispel.com, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
+def save_gameProducts(stores):
+    for store,gamelist in stores.items():
+        shop, created = Shop.objects.get_or_create(name=store)
+        if not created:
+            shop.save()
+        # else: Shop.save(update_fields=['updated'])
+        for game in gamelist:
+            logger.debug("saving game: ", game)
+            print("!!!!!!! saving game: ", game)
+            g, created = GameProduct.objects.update_or_create(name=game.name, stock=game.stock, price=game.price, shop=shop)
+            g.save()
+
+def getStoreData():
+    # Stores todo ( playoteket, 4-games.se, midgård games, storochliten, http://www.unispel.com, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
+    stores = {}
+    stores["Webhallen"] = webhallenGamelist()
+    stores["Alphaspel"] = alphaGamelist()
+    #stores["DragonsLair"] = dragonslairGamelist()
+    #stores["EuroGames"] = eurogamesGamelist()
+    #stores["Worldofboardgames"] = wordlofboardgamesGamelist()
+    #stores["AlltPaEttkortGames"] = alltpaettkortGamelist()
+    #stores["RetroSpelbutiken"] = retrospelbutikenGamelist()
+    #stores["Playoteket"] = playoteketGamelist()
+    return stores
+
 def main():
-    stores_dict = {}
+    stores = getStoreData()
+    save_gameProducts(stores)
+    #wishlist = genWishlist()
 
-    wishlist = genWishlist()
-
-    stores_dict["Webhallen"] = webhallenGamelist()
-    stores_dict["Alphaspel"] = alphaGamelist()
-    stores_dict["DragonsLair"] = dragonslairGamelist()
-    stores_dict["EuroGames"] = eurogamesGamelist()
-    stores_dict["Worldofboardgames"] = wordlofboardgamesGamelist()
-    stores_dict["AlltPaEttkortGames"] = alltpaettkortGamelist()
-    stores_dict["RetroSpelbutiken"] = retrospelbutikenGamelist()
-    stores_dict["Playoteket"] = playoteketGamelist()
-
-    for k,v in stores_dict.items():
-        matchGamesWithWishes(v, wishlist, storename=k)
+    #for k,v in stores.items():
+    #    matchGamesWithWishes(v, wishlist, storename=k)
 
 if __name__ == "__main__":
+    #application = get_wsgi_application()
     main()
 

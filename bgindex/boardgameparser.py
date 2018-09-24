@@ -61,7 +61,8 @@ WISHURLMUST = "https://www.boardgamegeek.com/xmlapi/collection/carl77?wishlist=1
 WISHURLLOVE = "https://www.boardgamegeek.com/xmlapi/collection/carl77?wishlist=1&%20wishlistpriority=2"
 WISHURLS = [WISHURLMUST, WISHURLLOVE]
 
-ALPHAURL = "https://alphaspel.se/491-bradspel/news/?page=%s"
+#ALPHAURL = "https://alphaspel.se/491-bradspel/news/?page=%s"
+ALPHAURL = "https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s"
 DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent/strategy"
 EUROGAMESURL = "http://www.eurogames.se/butik/?swoof=1&filter_attribut=butik-sortiment&orderby=date"
 WORLDOFBOARDGAMESURL = "https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori"
@@ -151,14 +152,21 @@ def parseAlphaGames(soup):
     games = contenttable.find_all("div", {"class": "product"})
     for game in games:
         name = game.find("div", {"class": "product-name"}).text.strip()
+        price = game.find("div", {"class": "price text-success"}).text.replace("\n", "", -1).strip()
         stock = not any(word in game.find("div", {"class": "stock"}).text.strip().lower() for word in ("slut", "kommande"))
-        game = GameItem(name=name, stock=stock, price="")
+        game = GameItem(name=name, stock=stock, price=price)
         gamelist.append(game)
     return gamelist
 
 def alphaGamelist():
     gamelist = []
-    for i in range(1,5): # iterate over paginated pages of new games
+    # nr of pages
+    html, charset = httpbplate.createHttpRequest(ALPHAURL % 1)
+    pagesoup = httpbplate.getUrlSoupData(html, charset)
+    pages = pagesoup.find("ul", {"class": "pagination pagination-sm pull-right"})
+    pgnrs = pages.find_all("a")
+    pgmax = max([ int(pgnr.text) for pgnr in pgnrs if pgnr.text.isdigit()])
+    for i in range(1,5): # TODO iterate over paginated pages of new games change to pgmax
         html, charset = httpbplate.createHttpRequest(ALPHAURL % i)
         soup = httpbplate.getUrlSoupData(html, charset)
         gamelist.extend(parseAlphaGames(soup))
@@ -436,7 +444,10 @@ def save_gameProducts(stores):
         for game in gamelist:
             logger.debug("saving game: ", game)
             print("!!!!!!! saving game: ", game)
-            g, created = GameProduct.objects.update_or_create(name=game.name, stock=game.stock, price=game.price, shop=shop)
+            game_name = game.name.replace("\n", "", -1)
+            game_name = game_name.strip()
+            game_name = " ".join(game_name.split())
+            g, created = GameProduct.objects.update_or_create(name=game_name, shop=shop, defaults={"stock": game.stock, "price": game.price})
             g.save()
 
 def getStoreData():
@@ -444,12 +455,12 @@ def getStoreData():
     stores = {}
     stores["Webhallen"] = webhallenGamelist()
     stores["Alphaspel"] = alphaGamelist()
-    #stores["DragonsLair"] = dragonslairGamelist()
-    #stores["EuroGames"] = eurogamesGamelist()
-    #stores["Worldofboardgames"] = wordlofboardgamesGamelist()
-    #stores["AlltPaEttkortGames"] = alltpaettkortGamelist()
-    #stores["RetroSpelbutiken"] = retrospelbutikenGamelist()
-    #stores["Playoteket"] = playoteketGamelist()
+    stores["DragonsLair"] = dragonslairGamelist()
+    stores["EuroGames"] = eurogamesGamelist()
+    stores["Worldofboardgames"] = wordlofboardgamesGamelist()
+    stores["AlltPaEttkortGames"] = alltpaettkortGamelist()
+    stores["RetroSpelbutiken"] = retrospelbutikenGamelist()
+    stores["Playoteket"] = playoteketGamelist()
     return stores
 
 def main():

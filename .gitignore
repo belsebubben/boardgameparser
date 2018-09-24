@@ -4,3 +4,6 @@ httpbplate.py
 geckodriver.log
 tmp/*
 tmp
+db.sqlite3
+bgindex/db.sqlite3
+bgindex/bgs/migrations/*

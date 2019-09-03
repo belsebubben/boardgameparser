@@ -1,4 +1,4 @@
-#!/home/carl/.pyvenv3/bin/python
+#!/home/carl/.bgparser/bin/python
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 
 #pip install python-Levenshtein
@@ -7,7 +7,7 @@
 # Selenium firefox geckodriver
 # https://github.com/mozilla/geckodriver/releases
 
-#wget "https://github.com/mozilla/geckodriver/releases/download/v0.21.0/geckodriver-v0.21.0-linux64.tar.gz" -O /tmp/geckodriver.tar.gz && tar -C /opt -xzf /tmp/geckodriver.tar.gz && chmod 755 /opt/geckodriver && ln -fs /opt/geckodriver /usr/bin/geckodriver && ln -fs /opt/geckodriver /usr/local/bin/geckodriver
+#wget "https://github.com/mozilla/geckodriver/releases/download/v0.24.0/geckodriver-v0.24.0-linux64.tar.gz" -O /tmp/geckodriver.tar.gz && tar -C /opt -xzf /tmp/geckodriver.tar.gz && chmod 755 /opt/geckodriver && ln -fs /opt/geckodriver /usr/bin/geckodriver && ln -fs /opt/geckodriver /usr/local/bin/geckodriver
 
 
 import sys
@@ -63,7 +63,8 @@ WISHURLS = [WISHURLMUST, WISHURLLOVE]
 
 #ALPHAURL = "https://alphaspel.se/491-bradspel/news/?page=%s"
 ALPHAURL = "https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s"
-DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent/strategy"
+#DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent/strategy"
+DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent"
 EUROGAMESURL = "http://www.eurogames.se/butik/?swoof=1&filter_attribut=butik-sortiment&orderby=date"
 WORLDOFBOARDGAMESURL = "https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori"
 ALLTPAETTKORTURL = "https://www.alltpaettkort.se/butik/?orderby=date"
@@ -455,12 +456,11 @@ def getStoreData():
     stores = {}
     stores["Webhallen"] = webhallenGamelist()
     stores["Alphaspel"] = alphaGamelist()
-    stores["DragonsLair"] = dragonslairGamelist()
-    stores["EuroGames"] = eurogamesGamelist()
     stores["Worldofboardgames"] = wordlofboardgamesGamelist()
     stores["AlltPaEttkortGames"] = alltpaettkortGamelist()
     stores["RetroSpelbutiken"] = retrospelbutikenGamelist()
     stores["Playoteket"] = playoteketGamelist()
+    stores["DragonsLair"] = dragonslairGamelist()
     return stores
 
 def main():

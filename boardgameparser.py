@@ -63,15 +63,12 @@ WISHURLS = [WISHURLMUST, WISHURLLOVE]
 
 #ALPHAURL = "https://alphaspel.se/491-bradspel/news/?page=%s"
 ALPHAURL = "https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s"
-#DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent/strategy"
-DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent"
+DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent/price:1:10000"
 EUROGAMESURL = "http://www.eurogames.se/butik/?swoof=1&filter_attribut=butik-sortiment&orderby=date"
 WORLDOFBOARDGAMESURL = "https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori"
-ALLTPAETTKORTURL = "https://www.alltpaettkort.se/butik/?orderby=date"
-ALLTPAETTKORTURLPAGED =  "https://www.alltpaettkort.se/butik/page/%s/?orderby=date"
+ALLTPAETTKORTURL = "https://www.alltpaettkort.se/butik/%s?orderby=date"
 WEBHALLENURL = "https://www.webhallen.com/se/category/3777-Bradspel?f=stock%5E0&page=1&sort=latest"
 RETROSPELBUTIKEN = "http://retrospelbutiken.se/store/category.php?category=190"
-RETROSPELBUTIKENPAGED = "http://retrospelbutiken.se/store/category.php?category=190&page=%s&sort=0"
 PLAYOTEKETURL = "https://www.playoteket.com/strategi?orderby=quantity&orderway=desc"
 PLAYOTEKETURLPAGED = "https://www.playoteket.com/strategi?orderby=quantity&orderway=desc&p=%s"
 
@@ -167,7 +164,7 @@ def alphaGamelist():
     pages = pagesoup.find("ul", {"class": "pagination pagination-sm pull-right"})
     pgnrs = pages.find_all("a")
     pgmax = max([ int(pgnr.text) for pgnr in pgnrs if pgnr.text.isdigit()])
-    for i in range(1,5): # TODO iterate over paginated pages of new games change to pgmax
+    for i in range(1,pgmax): # TODO iterate over paginated pages of new games change to pgmax
         html, charset = httpbplate.createHttpRequest(ALPHAURL % i)
         soup = httpbplate.getUrlSoupData(html, charset)
         gamelist.extend(parseAlphaGames(soup))
@@ -199,7 +196,11 @@ def dragonslairGamelist():
     soup = httpbplate.getUrlSoupData(html, charset)
     gamelist.extend(parseDragonslairGames(soup))
 
-    for i in range(2,5): # iterate over paginated pages of new games
+    ##pagination
+    pages = soup.find("ul", {"class": "pagination"})
+    pgmax = int(pages.find_all('a')[-2].text)
+
+    for i in range(2,pgmax): # iterate over paginated pages of new games
         html, charset = httpbplate.createHttpRequest(DRAGONSLAIRURL + "/%d" % i )
         soup = httpbplate.getUrlSoupData(html, charset)
         gamelist.extend(parseDragonslairGames(soup))
@@ -258,8 +259,12 @@ def parseWordlofboardgamesGames(soup):
 
 def wordlofboardgamesGamelist():
     gamelist = []
-    for count in ("", "/40", "/80"):
-        html, charset = httpbplate.createHttpRequest(WORLDOFBOARDGAMESURL % count)
+    html, charset = httpbplate.createHttpRequest(WORLDOFBOARDGAMESURL % '')
+    soup = httpbplate.getUrlSoupData(html, charset)
+    gamelist.extend(parseWordlofboardgamesGames(soup))
+    pgmax = int(soup.find('div', {'style': 'float: left; width: 34%; text-align: center;'}).text.strip().split()[-1])
+    for count in range(0,pgmax,40):
+        html, charset = httpbplate.createHttpRequest(WORLDOFBOARDGAMESURL % ('/' + str(count)))
         soup = httpbplate.getUrlSoupData(html, charset)
         gamelist.extend(parseWordlofboardgamesGames(soup))
 
@@ -294,11 +299,12 @@ def parseAlltpaettkortGames(soup):
 
 def alltpaettkortGamelist():
     gamelist = []
-    html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURL)
+    html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURL % '')
     soup = httpbplate.getUrlSoupData(html, charset)
+    pgmax = int(soup.find('nav', {'class': 'woocommerce-pagination'}).find_all('a')[-2].text)
     gamelist.extend(parseAlltpaettkortGames(soup))
-    for count in ("2", "3", "4"):
-        html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURLPAGED % count)
+    for count in range(2, pgmax):
+        html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURL % ('page/' + str(count) + '/') )
         soup = httpbplate.getUrlSoupData(html, charset)
         gamelist.extend(parseAlltpaettkortGames(soup))
     return gamelist
@@ -337,11 +343,14 @@ def retrospelbutikenGamelist():
     gamelist = []
     html, charset = httpbplate.createHttpRequest(RETROSPELBUTIKEN)
     soup = httpbplate.getUrlSoupData(html, charset)
-    #sides = soup.find(string="Nästa Sida >")
+    
+    #pgmax
+    sides = soup.find(string="Nästa Sida >")
+    pgmax = int(sides.previous_element.find_previous('a').text.strip())
 
     gamelist.extend(parseAlltpaettkortGames(soup))
-    for count in ("2", "3", "4"):
-        html, charset = httpbplate.createHttpRequest(RETROSPELBUTIKENPAGED % count)
+    for count in range(2, pgmax):
+        html, charset = httpbplate.createHttpRequest(RETROSPELBUTIKEN + '&' + 'page=' + str(count) + '&sort=0')
         logger.debug("Getting page %s, with charset %s" % (count, charset))
         soup = httpbplate.getUrlSoupData(html, charset)
         gamelist.extend(parseRetrospelButiken(soup))
@@ -383,33 +392,45 @@ def playoteketGamelist():
 # End Playoteket
 
 
-def matchGamesWithWishes(gamelist, wishlist, storename="Unknown Store"):
-    with open(filterlistfile) as flfile:
-        filterlist = flfile.readlines()
+def matchGamesWithWishes():
 
-    try:
-    
-        for game in gamelist:
-            skip = False
-            for filterentry in filterlist:
-                if fuzz.token_sort_ratio(game.name, filterentry) > 90:
-                    skip = True
-            if skip:
-                continue
-            name = ''.join([c for c in game.name if c.isalnum() or c.isspace()]).lower()
-            for wish in wishlist:
-                logger.debug("Matching: ", wish, "with: ", game.name)
-                wish = ''.join([c for c in wish if c.isalnum() or c.isspace()]).lower()
-                #matchRatio = SequenceMatcher(lambda x: x == ' ', game.lower(), wish.lower()).ratio()
-                #matchRatio = SequenceMatcher(None, game.lower(), wish.lower()).ratio()
-                matchRatio = fuzz.token_sort_ratio(game.name, wish)
-                if (matchRatio > 65 and len(name.split(" ")) > 1) or (matchRatio > 81 and len(name.split(" ")) == 1) :
-                    print("Match!!!: ", "Game: ", game, "Wish: ", wish, "Storename: ", storename )
-                    print("Match ratio: ", matchRatio)
-                    print()
-    except:
-        logger.error("Store", storename,  "Gamelist", gamelist)
-        logger.error(sys.exc_info())
+    for wish in Wishlist.objects.all():
+        wishname = ''.join([c for c in wish.name if c.isalnum() or c.isspace()]).lower()
+        for game in GameProduct.objects.all():
+            productname = ''.join([c for c in game.name if c.isalnum() or c.isspace()]).lower()
+            matchRatio = fuzz.token_sort_ratio(productname, wishname)
+            logger.debug("Matching: ", wish, "with: ", game.name)
+            if (matchRatio > 65 and len(productname.split(" ")) > 1) or (matchRatio > 81 and len(productname.split(" ")) == 1) :
+                print("Match!: ", "Game: ", game.name, "Wish: ", wish.name, "Storename: ", game.shop.name )
+                print("Match ratio: ", matchRatio)
+
+
+#    with open(filterlistfile) as flfile:
+#        filterlist = flfile.readlines()
+#
+#    try:
+#    
+#        for game in gamelist:
+#            skip = False
+#            for filterentry in filterlist:
+#                if fuzz.token_sort_ratio(game.name, filterentry) > 90:
+#                    skip = True
+#            if skip:
+#                continue
+#            name = ''.join([c for c in game.name if c.isalnum() or c.isspace()]).lower()
+#            for wish in wishlist:
+#                logger.debug("Matching: ", wish, "with: ", game.name)
+#                wish = ''.join([c for c in wish if c.isalnum() or c.isspace()]).lower()
+#                #matchRatio = SequenceMatcher(lambda x: x == ' ', game.lower(), wish.lower()).ratio()
+#                #matchRatio = SequenceMatcher(None, game.lower(), wish.lower()).ratio()
+#                matchRatio = fuzz.token_sort_ratio(game.name, wish)
+#                if (matchRatio > 65 and len(name.split(" ")) > 1) or (matchRatio > 81 and len(name.split(" ")) == 1) :
+#                    print("Match!!!: ", "Game: ", game, "Wish: ", wish, "Storename: ", storename )
+#                    print("Match ratio: ", matchRatio)
+#                    print()
+#    except:
+#        logger.error("Store", storename,  "Gamelist", gamelist)
+#        logger.error(sys.exc_info())
 
 def genWishlist():
     wishes = []
@@ -454,22 +475,21 @@ def save_gameProducts(stores):
 def getStoreData():
     # Stores todo ( playoteket, 4-games.se, midgård games, storochliten, http://www.unispel.com, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
     stores = {}
-    stores["Webhallen"] = webhallenGamelist()
-    stores["Alphaspel"] = alphaGamelist()
-    stores["Worldofboardgames"] = wordlofboardgamesGamelist()
-    stores["AlltPaEttkortGames"] = alltpaettkortGamelist()
+    #stores["Alphaspel"] = alphaGamelist()
+    #stores["DragonsLair"] = dragonslairGamelist()
+    #stores["Worldofboardgames"] = wordlofboardgamesGamelist()
+    #stores["AlltPaEttkortGames"] = alltpaettkortGamelist()
     stores["RetroSpelbutiken"] = retrospelbutikenGamelist()
-    stores["Playoteket"] = playoteketGamelist()
-    stores["DragonsLair"] = dragonslairGamelist()
+    #stores["Playoteket"] = playoteketGamelist()
+    #stores["Webhallen"] = webhallenGamelist()
     return stores
 
 def main():
     stores = getStoreData()
     save_gameProducts(stores)
-    #wishlist = genWishlist()
+    #wishlist = genWishlist() # make a collector function
 
-    #for k,v in stores.items():
-    #    matchGamesWithWishes(v, wishlist, storename=k)
+    matchGamesWithWishes()
 
 if __name__ == "__main__":
     #application = get_wsgi_application()

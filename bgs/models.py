@@ -1,4 +1,5 @@
 from django.db import models
+from time import time
 
 class Game(models.Model):
     # should we get them all from the geek
@@ -11,6 +12,7 @@ class Wishlist(models.Model):
 
 class Shop(models.Model):
     name = models.CharField(max_length=200, unique=True)
+    scrapetime = models.IntegerField(default=int(time()))
 
 class GameProduct(models.Model):
     name = models.CharField(max_length=200, null=False)

@@ -8,6 +8,7 @@ class Game(models.Model):
 class Wishlist(models.Model):
     #game = models.ForeignKey(Game, on_delete=models.CASCADE)
     name = models.CharField(max_length=200, unique=True)
+    imageurl = models.CharField(max_length=300, default='None')
     priority = models.IntegerField()
 
 class Shop(models.Model):

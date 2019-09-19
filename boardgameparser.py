@@ -19,6 +19,7 @@ from urllib import parse
 import urllib.request
 import time
 import httpbplate
+from operator import methodcaller
 # from difflib import SequenceMatcher
 from fuzzywuzzy import fuzz
 
@@ -164,20 +165,25 @@ def parseAlphaGames(soup):
         gamelist.append(game)
     return gamelist
 
+
+def soupExtractor(soup,extractions):
+    pass
+
 class AlphaspelScraper():
-    def __init__(self):
+    def __init__(self, settings):
+        self.settings = settings
         self.url = ALPHAURL
         self.failed = False
         self.nrerrors = 0
         self.nrparsed = 0
         self.firstpageurl = self.url % 1
         try:
-            self.firstpage = getpagesoup(url)
+            self.firstpage = getpagesoup(self.firstpageurl)
         except:
             self.failed = True
         self.setpgmaxnr()
         self.startpagenr = 1
-        self.gamelist = []
+        self.games = []
 
         # todo map,filter where functions for extractions of elements are fed to a generic class
 
@@ -192,27 +198,56 @@ class AlphaspelScraper():
 
     def parsePage(self,soup):
         for game in getGameElements(soup):
+            data = {}
             try:
-                name = game.find("div", {"class": "product-name"}).text.strip()
-                price = game.find("div", {"class": "price text-success"}).text.replace("\n", "", -1).strip()
-                stock = not any(word in game.find("div", {"class": "stock"}).text.strip().lower() for word in ("slut", "kommande"))
-                game = GameItem(name=name, stock=stock, price=price)
-                self.gamelist.append(game)
-                self.nrparsed +=1
+                for dtype in ('name', 'stock', 'price'):
+                    gametypesoup = game
+
+                    for s in self.settings['gamesoup'][dtype]['soups']:
+                        extract = methodcaller(s[0], *s[1]) # operator.methodcaller('find', 'ul', {'class': 'pagination pagi...)
+                        logger.debug('using soup: "%s"' % str(extract))
+                        gametypesoup =  extract(gametypesoup)
+                    data[dtype] = gametypesoup
+                    if 'funcs' in self.settings['gamesoup'][dtype]:
+                        logger.debug('using extraction func: "%s"' % str(self.settings['pagemaxnr']))
+                        data[dtype] = self.settings['gamesoup']['name']['funcs'](data[dtype])
+
             except:
                 logger.warn("Error in parsing game element %s" % (game))
                 self.nrerrors +=1
 
+            game = GameItem(**data)
+            self.games.append(game)
+            self.nrparsed +=1
 
     def setpgmax(self):
-        pages = self.firstpage.find('ul', {'class': 'pagination pagination-sm pull-right'}).find_all('a')
-        #pgnrs = pages.find_all("a")
-        self.pgmax = max([ int(pgnr.text) for pgnr in pgnrs if pgnr.text.isdigit()])
+        for s in self.settings['pagemaxnr']['soups']:
+            extract = methodcaller(s[0], *s[1]) # operator.methodcaller('find', 'ul', {'class': 'pagination pagi...)
+            logger.debug('using soup: "%s"' % str(extract))
+            self.firstpage = extract(self.firstpage)
+        self.pgmaxnr =  self.firstpage
+
+        if 'funcs' in self.settings['pagemaxnr']:
+            logger.debug('using extraction func: "%s"' % str(self.settings['pagemaxnr']))
+            self.pgmaxnr = self.settings['pagemaxnr']['funcs'](self.firstpage)
+
+        assert(type(self.pgmaxnr) == int)
 
     def getPages(self):
         for pagenr in range(self.startpagenr,self.pgmaxnr):
             self.parsePage(self.url % pagenr)
 
+ALPHASPEL = {'url': 'https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s',\
+        'gamesoup': {'name': {'soups': (('find',("div", {"class": "product-name"})), ('text', ())),\
+        'funcs': lambda x: x.strip()},\
+        'price': {'soups': (('find', ({"class": "price text-success"})),('text', ())),\
+        'funcs': lambda x: xreplace("\n", "", -1).strip()},\
+        'stock':{'soups': (('find', ("div", {"class": "stock"}))),\
+        'funcs': (lambda x: 'slut' not in x.text.strip().lower())}},\
+        'gamelistsoup': {'soups': (('find', ("div", {"id": "main"})), ('find_all', ("div", {"class": "product"})))},\
+        'pagemaxnr': {'soups': (('find', ('ul', {'class': 'pagination pagination-sm pull-right'})),\
+        ('find_all', ('a'))), 'funcs': (lambda x: max([int(pgnr.text) for pgnr in x if pgnr.text.isdigit()]))},\
+        'parsetype': 'soup'}
 
 def alphaGamelist():
     gamelist = []
@@ -423,7 +458,11 @@ def playoteketGamelist():
 
 def matchGamesWithWishes():
 
-    allgames = GameProduct.objects.filter(stock=True)
+    # todo show unmatched wishes
+    # todo show lowest price
+
+    #allgames = GameProduct.objects.filter(stock=True)
+    allgames = GameProduct.objects.filter()
 
     with open(filterlistfile) as flfile:
         filterwords = [ l.strip() for l in flfile.readlines()]
@@ -454,7 +493,8 @@ def matchGamesWithWishes():
             matchRatio = fuzz.ratio(gamename, wishname)
 
             logger.debug('Matching: %s with %s' % (wish.name, game.name))
-            if (matchRatio > 75 and len(game.name.split(" ")) > 1) or (matchRatio > 81 and len(game.name.split(" ")) == 1) :
+            # todo . examine different ratios depending on nr of words in product
+            if (matchRatio > 72 and len(game.name.split(" ")) > 1) or (matchRatio > 81 and len(game.name.split(" ")) == 1) :
                 if not wishmatch:
                     print('\nGame: %s' % (wish.name))
                     wishmatch = True
@@ -463,6 +503,7 @@ def matchGamesWithWishes():
 
 
 def genWishlist():
+    # todo make it wait for the request to generate 
     wishes = []
     for want,wantname in WISHDICT.items():
         wishurl = WISHURL + want
@@ -477,11 +518,11 @@ def genWishlist():
             
         for node in doc.getElementsByTagName("item"):
             name = node.getElementsByTagName("name")
+            imageurl = node.getElementsByTagName("image")[0].firstChild.data
             priority = node.getElementsByTagName("status")[0].attributes["wishlistpriority"].value
             wishname = name[0].firstChild.data
             wishes.append(wishname)
-            wishes.append(wishname)
-            w, created = Wishlist.objects.update_or_create(name=wishname, priority=priority)
+            w, created = Wishlist.objects.update_or_create(name=wishname, priority=priority, imageurl=imageurl)
             try:
                 w.save()
             except django.db.utils.IntegrityError:
@@ -507,7 +548,7 @@ def save_gameProducts(stores):
             g.save()
 
 def getStoreData():
-    # Stores todo ( playoteket, 4-games.se, midgård games, storochliten, http://www.unispel.com, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
+    # Stores todo ( spelexperten, playoteket, 4-games.se, midgård games, storochliten, http://www.unispel.com, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
     stores = {}
     #stores["Alphaspel"] = alphaGamelist()
     #stores["DragonsLair"] = dragonslairGamelist()
@@ -521,7 +562,7 @@ def getStoreData():
 def main():
     stores = getStoreData()
     save_gameProducts(stores)
-    #wishlist = genWishlist() # make a collector function
+    wishlist = genWishlist() # make a collector function
 
     matchGamesWithWishes()
 

@@ -43,6 +43,7 @@ import selenium
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 
+# debugging
 debug = False
 
 # logging
@@ -165,90 +166,6 @@ def parseAlphaGames(soup):
         gamelist.append(game)
     return gamelist
 
-
-def soupExtractor(soup,extractions):
-    pass
-
-class AlphaspelScraper():
-    def __init__(self, settings):
-        self.settings = settings
-        self.url = ALPHAURL
-        self.failed = False
-        self.nrerrors = 0
-        self.nrparsed = 0
-        self.firstpageurl = self.url % 1
-        try:
-            self.firstpage = getpagesoup(self.firstpageurl)
-        except:
-            self.failed = True
-        self.setpgmaxnr()
-        self.startpagenr = 1
-        self.games = []
-
-        # todo map,filter where functions for extractions of elements are fed to a generic class
-
-    def getGameElements(self,soup):
-        '''Get a list of soup elements (one for each game)'''
-        try:
-            contenttable = soup.find("div", {"id": "main"})
-            games = contenttable.find_all("div", {"class": "product"})
-        except:
-            logger.warn('Failed to get game element list for %s' % self.url)
-        return games
-
-    def parsePage(self,soup):
-        for game in getGameElements(soup):
-            data = {}
-            try:
-                for dtype in ('name', 'stock', 'price'):
-                    gametypesoup = game
-
-                    for s in self.settings['gamesoup'][dtype]['soups']:
-                        extract = methodcaller(s[0], *s[1]) # operator.methodcaller('find', 'ul', {'class': 'pagination pagi...)
-                        logger.debug('using soup: "%s"' % str(extract))
-                        gametypesoup =  extract(gametypesoup)
-                    data[dtype] = gametypesoup
-                    if 'funcs' in self.settings['gamesoup'][dtype]:
-                        logger.debug('using extraction func: "%s"' % str(self.settings['pagemaxnr']))
-                        data[dtype] = self.settings['gamesoup']['name']['funcs'](data[dtype])
-
-            except:
-                logger.warn("Error in parsing game element %s" % (game))
-                self.nrerrors +=1
-
-            game = GameItem(**data)
-            self.games.append(game)
-            self.nrparsed +=1
-
-    def setpgmax(self):
-        for s in self.settings['pagemaxnr']['soups']:
-            extract = methodcaller(s[0], *s[1]) # operator.methodcaller('find', 'ul', {'class': 'pagination pagi...)
-            logger.debug('using soup: "%s"' % str(extract))
-            self.firstpage = extract(self.firstpage)
-        self.pgmaxnr =  self.firstpage
-
-        if 'funcs' in self.settings['pagemaxnr']:
-            logger.debug('using extraction func: "%s"' % str(self.settings['pagemaxnr']))
-            self.pgmaxnr = self.settings['pagemaxnr']['funcs'](self.firstpage)
-
-        assert(type(self.pgmaxnr) == int)
-
-    def getPages(self):
-        for pagenr in range(self.startpagenr,self.pgmaxnr):
-            self.parsePage(self.url % pagenr)
-
-ALPHASPEL = {'url': 'https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s',\
-        'gamesoup': {'name': {'soups': (('find',("div", {"class": "product-name"})), ('text', ())),\
-        'funcs': lambda x: x.strip()},\
-        'price': {'soups': (('find', ({"class": "price text-success"})),('text', ())),\
-        'funcs': lambda x: xreplace("\n", "", -1).strip()},\
-        'stock':{'soups': (('find', ("div", {"class": "stock"}))),\
-        'funcs': (lambda x: 'slut' not in x.text.strip().lower())}},\
-        'gamelistsoup': {'soups': (('find', ("div", {"id": "main"})), ('find_all', ("div", {"class": "product"})))},\
-        'pagemaxnr': {'soups': (('find', ('ul', {'class': 'pagination pagination-sm pull-right'})),\
-        ('find_all', ('a'))), 'funcs': (lambda x: max([int(pgnr.text) for pgnr in x if pgnr.text.isdigit()]))},\
-        'parsetype': 'soup'}
-
 def alphaGamelist():
     gamelist = []
     # nr of pages
@@ -269,6 +186,93 @@ def alphaGamelist():
 
     return gamelist
 # End Alphaspel
+
+def soupExtractor(soup,extractions):
+    pass
+
+class GenericScraper():
+    def __init__(self):
+        self.games = []
+        self.failed = False
+        self.nrerrors = 0
+        self.nrparsed = 0
+        try:
+            self.firstpage = getpagesoup(self.firstpageurl)
+        except:
+            self.failed = True
+
+        self.parsePage(self.firstpage, self.firstpageurl)
+        self.setpgmaxnr()
+
+    def getGameElements(self,soup):
+        '''Get a list of soup elements (one for each game)'''
+        try:
+            contenttable = soup.find("div", {"id": "main"})
+            games = contenttable.find_all("div", {"class": "product"})
+        except:
+            logger.warning('Failed to get game element list for %s' % self.url)
+        return games
+
+    def parsePage(self,soup,url):
+        for game in self.getGameElements(soup):
+            data = {}
+            try:
+                for dtype in ('name', 'stock', 'price'):
+                    logger.debug('Deriving: "%s"' % (dtype))
+                    gametypesoup = game
+
+                    for f in self.gamesoup[dtype]['funcs']:
+                        gametypesoup =  f(gametypesoup)
+                        logger.debug('Derived "%s"' % (gametypesoup))
+
+                    data[dtype] = gametypesoup
+
+            except Exception as err:
+                logger.warning('Error in parsing type:"%s" Error:"%s";\n Game element: >>>%s<<<' % (dtype, err, game))
+                self.nrerrors +=1
+                continue
+
+            game = GameItem(**data)
+            print(game)
+            self.games.append(game)
+            self.nrparsed +=1
+
+    def setpgmaxnr(self):
+        for f in self.pagemaxnr['funcs']:
+
+            self.firstpage = f(self.firstpage)
+        self.pgmaxnr = self.firstpage
+        assert(type(self.pgmaxnr) == int)
+
+    def parsePages(self):
+        for pagenr in range(self.startpagenr,self.pgmaxnr):
+            url = self.url % str(pagenr)
+            soup = getpagesoup(url)
+            self.parsePage(soup, url)
+
+class ALPHASPEL(GenericScraper):
+    def __init__(self):
+
+        self.startpagenr = 1
+        self.url = 'https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s'
+        self.firstpageurl = 'https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new'
+        self.gamesoup = {'name': {'funcs': (lambda x: x.find("div", {"class": "product-name"}), lambda x: x.text.replace('\n', '', -1).strip())},\ # todo fix blanks and spaces
+            'price': {'funcs':(lambda x: x.find('div', {"class": "price text-success"}),\
+            lambda x: x.text, lambda x: x.replace('\n', '', -1).strip())},\
+            'stock':{'funcs': (lambda x: x.find("div", {"class": "stock"}), lambda x: 'slut' not in x.text.strip().lower())}}
+
+        self.gamelistsoup = {'funcs':(lambda x: x.find('div', {'id': 'main"'}), lambda x: x.find_all('div', {'class': 'product'}))}
+
+        self.pagemaxnr = {'funcs':(lambda x: x.find('ul', {'class': 'pagination pagination-sm pull-right'}).find_all('a'),\
+                    lambda x: max([int(pgnr.text) for pgnr in x if pgnr.text.isdigit()]))}
+
+        self.parsetype = 'soup'
+        super().__init__()
+
+    @classmethod
+    def url (cls, url):
+        return url + '&page=%s'
+
 
 # Dragons lair
 def parseDragonslairGames(soup):
@@ -560,9 +564,11 @@ def getStoreData():
     return stores
 
 def main():
-    stores = getStoreData()
+    #stores = getStoreData()
+    A = ALPHASPEL()
+    A.parsePages()
     save_gameProducts(stores)
-    wishlist = genWishlist() # make a collector function
+    #wishlist = genWishlist() # make a collector function
 
     matchGamesWithWishes()
 

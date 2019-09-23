@@ -12,13 +12,13 @@
 
 import sys
 import os
-import collections
 #sys.path.append("/home/carl/.local_python3/lib/python3.4/site-packages/")
+import collections
+import re
 from bs4 import BeautifulSoup
 from urllib import parse
 import urllib.request
 import time
-import httpbplate
 from operator import methodcaller
 # from difflib import SequenceMatcher
 from fuzzywuzzy import fuzz
@@ -43,6 +43,11 @@ import selenium
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 
+# local imports
+from bglib.lib import *
+from  bglib.httpbplate import *
+from stores import *
+
 # debugging
 debug = False
 
@@ -61,19 +66,17 @@ logformatter = logging.Formatter(LOGFORMAT)
 bgparselogger.setFormatter(logformatter)
 
 
-filterlistfile = "filterlist"
+filterlistfile = 'filterlist'
 WISHDICT = {'1': 'Must have', '2': 'Love to have', '3': 'Like to have', '4': 'Thinking about it'}
-WISHURL = "https://www.boardgamegeek.com/xmlapi/collection/carl77?wishlist=1&%20wishlistpriority="
+WISHURL = 'https://www.boardgamegeek.com/xmlapi/collection/carl77?wishlist=1&%20wishlistpriority='
 
-ALPHAURL = "https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s"
-DRAGONSLAIRURL = "https://www.dragonslair.se/product/boardgame/sort:recent/price:1:10000"
-WORLDOFBOARDGAMESURL = "https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori"
-ALLTPAETTKORTURL = "https://www.alltpaettkort.se/butik/%s?orderby=date"
-WEBHALLENURL = "https://www.webhallen.com/se/category/3777-Bradspel?f=stock%5E0&page=1&sort=latest"
-RETROSPELBUTIKEN = "http://retrospelbutiken.se/store/category.php?category=190"
-PLAYOTEKETURL = "https://www.playoteket.com/strategi?orderby=quantity&orderway=desc"
-
-GameItem = collections.namedtuple('GameItem', 'name, stock, price') # TODO add url
+#ALPHAURL = 'https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s'
+#DRAGONSLAIRURL = 'https://www.dragonslair.se/product/boardgame/sort:recent/price:1:10000'
+WORLDOFBOARDGAMESURL = 'https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori'
+ALLTPAETTKORTURL = 'https://www.alltpaettkort.se/butik/%s?orderby=date'
+WEBHALLENURL = 'https://www.webhallen.com/se/category/3777-Bradspel?f=stock%5E0&page=1&sort=latest'
+RETROSPELBUTIKEN = 'http://retrospelbutiken.se/store/category.php?category=190'
+PLAYOTEKETURL = 'https://www.playoteket.com/strategi?orderby=quantity&orderway=desc'
 
 # Database stuff
 # game, wishlist, shop
@@ -144,135 +147,8 @@ def webhallenGamelist():
     return gamelist
 
 
-def getpagesoup(url):
-    try:
-        html, charset = httpbplate.createHttpRequest(url)
-        pagesoup = httpbplate.getUrlSoupData(html, charset)
-    except:
-        logger.warn('Failed to get first page from %s' % url)
-        raise
-    return pagesoup
-
-# Alphaspel
-def parseAlphaGames(soup):
-    gamelist = []
-    contenttable = soup.find("div", {"id": "main"})
-    games = contenttable.find_all("div", {"class": "product"})
-    for game in games:
-        name = game.find("div", {"class": "product-name"}).text.strip()
-        price = game.find("div", {"class": "price text-success"}).text.replace("\n", "", -1).strip()
-        stock = not any(word in game.find("div", {"class": "stock"}).text.strip().lower() for word in ("slut", "kommande"))
-        game = GameItem(name=name, stock=stock, price=price)
-        gamelist.append(game)
-    return gamelist
-
-def alphaGamelist():
-    gamelist = []
-    # nr of pages
-    html, charset = httpbplate.createHttpRequest(ALPHAURL % 1)
-    pagesoup = httpbplate.getUrlSoupData(html, charset)
-    pages = pagesoup.find("ul", {"class": "pagination pagination-sm pull-right"})
-    pgnrs = pages.find_all("a")
-    pgmax = max([ int(pgnr.text) for pgnr in pgnrs if pgnr.text.isdigit()])
-    for i in range(1,pgmax): # TODO iterate over paginated pages of new games change to pgmax
-        html, charset = httpbplate.createHttpRequest(ALPHAURL % i)
-        soup = httpbplate.getUrlSoupData(html, charset)
-        gamelist.extend(parseAlphaGames(soup))
-
-    if debug:
-        logger.debug("Alphaspel gamelist:")
-        for g in gamelist:
-            logger.debug(g)
-
-    return gamelist
-# End Alphaspel
-
 def soupExtractor(soup,extractions):
     pass
-
-class GenericScraper():
-    def __init__(self):
-        self.games = []
-        self.failed = False
-        self.nrerrors = 0
-        self.nrparsed = 0
-        try:
-            self.firstpage = getpagesoup(self.firstpageurl)
-        except:
-            self.failed = True
-
-        self.parsePage(self.firstpage, self.firstpageurl)
-        self.setpgmaxnr()
-
-    def getGameElements(self,soup):
-        '''Get a list of soup elements (one for each game)'''
-        try:
-            contenttable = soup.find("div", {"id": "main"})
-            games = contenttable.find_all("div", {"class": "product"})
-        except:
-            logger.warning('Failed to get game element list for %s' % self.url)
-        return games
-
-    def parsePage(self,soup,url):
-        for game in self.getGameElements(soup):
-            data = {}
-            try:
-                for dtype in ('name', 'stock', 'price'):
-                    logger.debug('Deriving: "%s"' % (dtype))
-                    gametypesoup = game
-
-                    for f in self.gamesoup[dtype]['funcs']:
-                        gametypesoup =  f(gametypesoup)
-                        logger.debug('Derived "%s"' % (gametypesoup))
-
-                    data[dtype] = gametypesoup
-
-            except Exception as err:
-                logger.warning('Error in parsing type:"%s" Error:"%s";\n Game element: >>>%s<<<' % (dtype, err, game))
-                self.nrerrors +=1
-                continue
-
-            game = GameItem(**data)
-            print(game)
-            self.games.append(game)
-            self.nrparsed +=1
-
-    def setpgmaxnr(self):
-        for f in self.pagemaxnr['funcs']:
-
-            self.firstpage = f(self.firstpage)
-        self.pgmaxnr = self.firstpage
-        assert(type(self.pgmaxnr) == int)
-
-    def parsePages(self):
-        for pagenr in range(self.startpagenr,self.pgmaxnr):
-            url = self.url % str(pagenr)
-            soup = getpagesoup(url)
-            self.parsePage(soup, url)
-
-class ALPHASPEL(GenericScraper):
-    def __init__(self):
-
-        self.startpagenr = 1
-        self.url = 'https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s'
-        self.firstpageurl = 'https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new'
-        self.gamesoup = {'name': {'funcs': (lambda x: x.find("div", {"class": "product-name"}), lambda x: x.text.replace('\n', '', -1).strip())},\ # todo fix blanks and spaces
-            'price': {'funcs':(lambda x: x.find('div', {"class": "price text-success"}),\
-            lambda x: x.text, lambda x: x.replace('\n', '', -1).strip())},\
-            'stock':{'funcs': (lambda x: x.find("div", {"class": "stock"}), lambda x: 'slut' not in x.text.strip().lower())}}
-
-        self.gamelistsoup = {'funcs':(lambda x: x.find('div', {'id': 'main"'}), lambda x: x.find_all('div', {'class': 'product'}))}
-
-        self.pagemaxnr = {'funcs':(lambda x: x.find('ul', {'class': 'pagination pagination-sm pull-right'}).find_all('a'),\
-                    lambda x: max([int(pgnr.text) for pgnr in x if pgnr.text.isdigit()]))}
-
-        self.parsetype = 'soup'
-        super().__init__()
-
-    @classmethod
-    def url (cls, url):
-        return url + '&page=%s'
-
 
 # Dragons lair
 def parseDragonslairGames(soup):
@@ -530,7 +406,7 @@ def genWishlist():
             try:
                 w.save()
             except django.db.utils.IntegrityError:
-                logger.warn('Failed to save entry: name:%s : prio:%s' % (wishname, priority))
+                logger.warning('Failed to save entry: name:%s : prio:%s' % (wishname, priority))
     logger.debug("Wishlist: %s" % wishes)
 
     return wishes
@@ -565,8 +441,10 @@ def getStoreData():
 
 def main():
     #stores = getStoreData()
-    A = ALPHASPEL()
-    A.parsePages()
+    #A = AlphaSpel()
+    #A.parsePages()
+    D = DragonsLair()
+    #D.parsePages()
     save_gameProducts(stores)
     #wishlist = genWishlist() # make a collector function
 

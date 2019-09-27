@@ -70,13 +70,7 @@ filterlistfile = 'filterlist'
 WISHDICT = {'1': 'Must have', '2': 'Love to have', '3': 'Like to have', '4': 'Thinking about it'}
 WISHURL = 'https://www.boardgamegeek.com/xmlapi/collection/carl77?wishlist=1&%20wishlistpriority='
 
-#ALPHAURL = 'https://alphaspel.se/491-bradspel/?ordering=desc&order_by=new&page=%s'
-#DRAGONSLAIRURL = 'https://www.dragonslair.se/product/boardgame/sort:recent/price:1:10000'
-WORLDOFBOARDGAMESURL = 'https://www.worldofboardgames.com/strategispel/nya_produkter%s#kategori'
-ALLTPAETTKORTURL = 'https://www.alltpaettkort.se/butik/%s?orderby=date'
 WEBHALLENURL = 'https://www.webhallen.com/se/category/3777-Bradspel?f=stock%5E0&page=1&sort=latest'
-RETROSPELBUTIKEN = 'http://retrospelbutiken.se/store/category.php?category=190'
-PLAYOTEKETURL = 'https://www.playoteket.com/strategi?orderby=quantity&orderway=desc'
 
 # Database stuff
 # game, wishlist, shop
@@ -149,191 +143,6 @@ def webhallenGamelist():
 
 def soupExtractor(soup,extractions):
     pass
-
-# Dragons lair
-def parseDragonslairGames(soup):
-    gamelist = []
-    contenttable = soup.find("div", {"id": "product-list"})
-    games = contenttable.find_all("div", {"class": "container"})
-    for game in games:
-        name = game.find("a", {"class": "label"}).text.strip()
-        stock = "I lager: Ja" in game.find("div", {"class": "controls"}).text.strip()
-        price = game.find("span", {"class": "price"}).text.strip() or None 
-        game = GameItem(name=name, stock=stock, price=price)
-        gamelist.append(game)
-    return gamelist
-
-def dragonslairGamelist():
-    gamelist = []
-    html, charset = httpbplate.createHttpRequest(DRAGONSLAIRURL) 
-    soup = httpbplate.getUrlSoupData(html, charset)
-    gamelist.extend(parseDragonslairGames(soup))
-
-    ##pagination
-    pages = soup.find("ul", {"class": "pagination"})
-    pgmax = int(pages.find_all('a')[-2].text)
-
-    for i in range(2,pgmax): # iterate over paginated pages of new games
-        html, charset = httpbplate.createHttpRequest(DRAGONSLAIRURL + "/%d" % i )
-        soup = httpbplate.getUrlSoupData(html, charset)
-        gamelist.extend(parseDragonslairGames(soup))
-
-    if debug:
-        logger.debug("Dragons lair gamelist:")
-        for g in gamelist:
-            logger.debug(g)
-
-    return gamelist
-# End Dragons lair
-
-# Wordlofboardgames
-def parseWordlofboardgamesGames(soup):
-    gamelist = []
-    games = soup.find_all("div", {"class": "product"})
-    for game in games:
-        name = game.findChild("a")["title"]
-        try:
-            price = game.find("div", {"class": "xlarge"}).next_element.next_element
-        except:
-            price = None
-        stock = game.find("a", {"class": "button green buttonshadow saveScrollPostion"}) is not None
-        game = GameItem(name=name, stock=stock, price=price)
-        gamelist.append(game)
-    return gamelist
-
-def wordlofboardgamesGamelist():
-    gamelist = []
-    html, charset = httpbplate.createHttpRequest(WORLDOFBOARDGAMESURL % '')
-    soup = httpbplate.getUrlSoupData(html, charset)
-    gamelist.extend(parseWordlofboardgamesGames(soup))
-    pgmax = int(soup.find('div', {'style': 'float: left; width: 34%; text-align: center;'}).text.strip().split()[-1])
-    for count in range(0,pgmax,40):
-        html, charset = httpbplate.createHttpRequest(WORLDOFBOARDGAMESURL % ('/' + str(count)))
-        soup = httpbplate.getUrlSoupData(html, charset)
-        gamelist.extend(parseWordlofboardgamesGames(soup))
-
-    logger.debug("WorldOfBoardGames gamelist:")
-    if debug:
-        for g in gamelist:
-            logger.debug(g)
-
-    return gamelist
-# End Wordlofboardgames
-
-# Alltpaettkort
-def parseAlltpaettkortGames(soup):
-    gamelist = []
-    #contenttable = soup.find("ul", {"class": "products"})
-    #print(contenttable)
-    games = soup.find_all("li", {"class": lambda L: L and L.find('post') > -1 })
-    logger.debug("Allt På Ett Kort gamelist:")
-    for game in games:
-        if debug:
-            print(game.prettify())
-        try:
-            name = game.find("h2").text
-            price = game.find("span", {"class": "price"}).text.replace("kr", "" ).replace(",", "").strip()
-            stock = game.find("a", {"class": "button add_to_cart_button product_type_simple"}) is not None
-            game = GameItem(name=name, stock=stock, price=price)
-            gamelist.append(game)
-            logger.debug(game)
-        except:
-            logger.debug(sys.exc_info())
-    return gamelist
-
-def alltpaettkortGamelist():
-    gamelist = []
-    html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURL % '')
-    soup = httpbplate.getUrlSoupData(html, charset)
-    pgmax = int(soup.find('nav', {'class': 'woocommerce-pagination'}).find_all('a')[-2].text)
-    gamelist.extend(parseAlltpaettkortGames(soup))
-    for count in range(2, pgmax):
-        html, charset = httpbplate.createHttpRequest(ALLTPAETTKORTURL % ('page/' + str(count) + '/') )
-        soup = httpbplate.getUrlSoupData(html, charset)
-        gamelist.extend(parseAlltpaettkortGames(soup))
-    return gamelist
-# End Allt på ett kort
-
-# Retrospelbutiken
-def parseRetrospelButiken(soup):
-    gamelist = []
-    # find all <td> tags that contain string "brädspel"
-    try:
-        bgtds = [ td for td in soup.find_all("td") if td and hasattr(td, "text") and "brädspel" in td.text.lower() ]
-    except:
-        logger.error("Fail getting games for retrospelbutiken '%s': entry:'%s'" % (str(sys.exc_info()), str(bgtds.prettify())))
-    logger.debug("Retrospelsbutiken game parsing")
-    logger.debug(bgtds)
-    for bgtd in bgtds:
-        try:
-            trparent = bgtd.find_parent("tr")
-            prevtr = trparent.find_previous("tr")
-            prevtr2 = prevtr.find_previous("tr")
-            psibs = bgtd.find_previous_siblings("td")
-            #nsibs =  bgtds[10].find_next_siblings("td")
-            name = prevtr2.find_all("td")[len(psibs)].text
-            price = bgtd.find("b").text
-            stock = "i lager" in  bgtd.text.lower()
-            game = GameItem(name=name, stock=stock, price=price)
-            #logger.debug("retrospelbutiken game %s" % game)
-            gamelist.append(game)
-        except Exception as exc:
-            #logger.error("Fail parse for retrospelbutiken '%s': entry:'%s'" % (str(sys.exc_info()), str(bgtd.prettify())))
-            logger.debug("Fail parse for retrospelbutiken '%s'\n" % str(exc))
-    return gamelist
-
-def retrospelbutikenGamelist():
-    logger.debug("getting games for retrospelbutiken")
-    gamelist = []
-    html, charset = httpbplate.createHttpRequest(RETROSPELBUTIKEN)
-    soup = httpbplate.getUrlSoupData(html, charset)
-    
-    #pgmax
-    sides = soup.find(string="Nästa Sida >")
-    pgmax = int(sides.previous_element.find_previous('a').text.strip())
-
-    gamelist.extend(parseAlltpaettkortGames(soup))
-    for count in range(2, pgmax):
-        html, charset = httpbplate.createHttpRequest(RETROSPELBUTIKEN + '&' + 'page=' + str(count) + '&sort=0')
-        logger.debug("Getting page %s, with charset %s" % (count, charset))
-        soup = httpbplate.getUrlSoupData(html, charset)
-        gamelist.extend(parseRetrospelButiken(soup))
-    return gamelist
-# End Retrospelbutiken
-
-# Playoteket
-def parsePlayoteket(soup):
-    gamelist = []
-    games = soup.find_all("div", {"class": "product-container"})
-    logger.debug("Playoteket game parsing")
-    for game in games:
-        try:
-            name = game.find("h3", {"class": "thename"}).string
-            price = game.find("span", {"class": "amount"}).string.strip()
-            stock = True
-            game = GameItem(name=name, stock=stock, price=price)
-            gamelist.append(game)
-        except:
-            logger.error("Failed parsing for playoteket: %s", sys.exc_info())
-        if debug:
-            logger.debug(game.prettify)
-    return gamelist
-
-def playoteketGamelist():
-    gamelist = []
-    html, charset = httpbplate.createHttpRequest(PLAYOTEKETURL)
-    soup = httpbplate.getUrlSoupData(html, charset)
-
-    gamelist.extend(parsePlayoteket(soup))
-
-    pages = soup.find("ul", {"class": "pagination"})
-    pagecount = pages.find_all("span")[-1].string
-    for count in range(2, int(pagecount)):
-        html, charset = httpbplate.createHttpRequest(PLAYOTEKETURL + '&p=' + str(count))
-        soup = httpbplate.getUrlSoupData(html, charset)
-        gamelist.extend(parseAlltpaettkortGames(soup))
-    return gamelist
-# End Playoteket
 
 
 def matchGamesWithWishes():
@@ -428,7 +237,7 @@ def save_gameProducts(stores):
             g.save()
 
 def getStoreData():
-    # Stores todo ( spelexperten, playoteket, 4-games.se, midgård games, storochliten, http://www.unispel.com, firstplayer.nu, http://www.gamesmania.se/, www.spelochsant.se )
+    # Stores todo ( spelexperten, midgård games, storochliten, http://www.unispel.com,  www.spelochsant.se )
     stores = {}
     #stores["Alphaspel"] = alphaGamelist()
     #stores["DragonsLair"] = dragonslairGamelist()
@@ -442,10 +251,16 @@ def getStoreData():
 def main():
     #stores = getStoreData()
     #A = AlphaSpel()
-    #A.parsePages()
-    D = DragonsLair()
-    #D.parsePages()
-    save_gameProducts(stores)
+    #D = DragonsLair()
+    #W = WorldOfBoardGames()
+    #A = AlltPaEttkort()
+    #R = RetroSpelButiken()
+    #P = Playoteket()
+    #four = FourGames()
+    #F = FirstPlayer()
+    G = GamesMania()
+
+    #save_gameProducts(stores)
     #wishlist = genWishlist() # make a collector function
 
     matchGamesWithWishes()

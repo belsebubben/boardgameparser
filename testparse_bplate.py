@@ -2,7 +2,7 @@
 
 from bs4 import BeautifulSoup
 import sys
-import httpbplate
+from bglib import httpbplate
 
 html, charset = httpbplate.createHttpRequest(URL)
 

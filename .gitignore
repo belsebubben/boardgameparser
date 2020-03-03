@@ -1,8 +1,7 @@
-filterlist
 __pycache__
-httpbplate.py
 geckodriver.log
 tmp/*
+bgs/migrations/*
 tmp
 db.sqlite3
 bgindex/db.sqlite3

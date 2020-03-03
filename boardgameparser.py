@@ -131,7 +131,7 @@ def webhallenGamelist():
 
         html = driver.page_source
         html = html.encode("UTF-8")
-        soup = httpbplate.getUrlSoupData(html, "UTF-8")
+        soup = getUrlSoupData(html, "UTF-8")
         gamelist.extend(parseWebhallenGames(soup))
         if debug:
             print(html)
@@ -197,7 +197,7 @@ def genWishlist():
     for want,wantname in WISHDICT.items():
         wishurl = WISHURL + want
 
-        xmlresp, charset = httpbplate.createHttpRequest(wishurl)
+        xmlresp, charset = createHttpRequest(wishurl)
         xmlresp = xmlresp.decode(charset or "UTF-8")
         tempfilename = tempfile.mktemp()
         with open(tempfilename, "w") as fhw:
@@ -250,17 +250,17 @@ def getStoreData():
 
 def main():
     #stores = getStoreData()
-    #A = AlphaSpel()
-    #D = DragonsLair()
+    A = AlphaSpel()
+    D = DragonsLair()
     #W = WorldOfBoardGames()
     #A = AlltPaEttkort()
     #R = RetroSpelButiken()
     #P = Playoteket()
     #four = FourGames()
     #F = FirstPlayer()
-    G = GamesMania()
+    #G = GamesMania()
 
-    #save_gameProducts(stores)
+    save_gameProducts(stores)
     #wishlist = genWishlist() # make a collector function
 
     matchGamesWithWishes()

@@ -46,7 +46,7 @@ from selenium.webdriver.firefox.options import Options
 # local imports
 from bglib.lib import *
 from  bglib.httpbplate import *
-from stores import *
+import stores
 
 # debugging
 debug = False
@@ -222,12 +222,19 @@ def genWishlist():
 
 
 def save_gameProducts(stores):
-    for store,gamelist in stores.items():
-        shop, created = Shop.objects.update_or_create(name=store, scrapetime=int(time.time()))
+    #for store,gamelist in stores.items():
+    for store in stores.__all__:
+        shop, created = Shop.objects.update_or_create(defaults={"name": store, "scrapetime": int(time.time())}, name=store)
+
+        try:
+            storeobj = getattr(stores, store)()
+        except:
+            print("Store %s failed to initialize" % store)
+            raise
         if not created:
             shop.save()
         # else: Shop.save(update_fields=['updated'])
-        for game in gamelist:
+        for game in storeobj.games:
             logger.debug("saving game: ", game)
             print("!!!!!!! saving game: ", game)
             game_name = game.name.replace("\n", "", -1)
@@ -238,7 +245,7 @@ def save_gameProducts(stores):
 
 def getStoreData():
     # Stores todo ( spelexperten, midgård games, storochliten, http://www.unispel.com,  www.spelochsant.se )
-    stores = {}
+    #stores = {}
     #stores["Alphaspel"] = alphaGamelist()
     #stores["DragonsLair"] = dragonslairGamelist()
     #stores["Worldofboardgames"] = wordlofboardgamesGamelist()
@@ -246,12 +253,12 @@ def getStoreData():
     #stores["RetroSpelbutiken"] = retrospelbutikenGamelist()
     #stores["Playoteket"] = playoteketGamelist()
     #stores["Webhallen"] = webhallenGamelist()
-    return stores
+    return stores.__all__
 
 def main():
     #stores = getStoreData()
-    A = AlphaSpel()
-    D = DragonsLair()
+    #A = AlphaSpel()
+    #D = DragonsLair()
     #W = WorldOfBoardGames()
     #A = AlltPaEttkort()
     #R = RetroSpelButiken()

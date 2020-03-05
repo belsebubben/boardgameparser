@@ -32,23 +32,24 @@ debug = False
 # logging
 import logging
 import traceback
-LOGFORMAT = "%(asctime)s %(levelname)s: line:%(lineno)d  func:%(funcName)s;  %(message)s"
-bgparselogger = logging.StreamHandler(stream=sys.stderr)
-logger = logging.getLogger('root')
-logger.addHandler(bgparselogger)
-if debug:
-    logger.setLevel(logging.DEBUG)
-else:
-    logger.setLevel(logging.INFO)
-logformatter = logging.Formatter(LOGFORMAT)
-bgparselogger.setFormatter(logformatter)
+#LOGFORMAT = "%(asctime)s %(levelname)s: line:%(lineno)d  func:%(funcName)s;  %(message)s"
+#bgparselogger = logging.StreamHandler(stream=sys.stderr)
+scrapelogger = logging.getLogger('root.scraper')
+#logger.addHandler(bgparselogger)
+#if debug:
+#    logger.setLevel(logging.DEBUG)
+#else:
+#    logger.setLevel(logging.INFO)
+#logformatter = logging.Formatter(LOGFORMAT)
+#bgparselogger.setFormatter(logformatter)
 
 def getpagesoup(url):
+    scrapelogger.debug('get page soup from "%s"' % url)
     try:
         html, charset = httpbplate.createHttpRequest(url)
         pagesoup = httpbplate.getUrlSoupData(html, charset)
     except:
-        logger.warning('Failed to get page from %s' % url)
+        scrapelogger.warning('Failed to get page from %s' % url)
         raise
     return pagesoup
 
@@ -63,54 +64,54 @@ class GenericScraper():
         self.parsePages()
 
     def parsefirstpage(self):
-        logger.debug('Parsing first page')
+        scrapelogger.debug('Parsing first page url: "%s"' % self.firstpageurl)
         try:
             self.firstpage = getpagesoup(self.firstpageurl)
             self.parsePage(self.firstpage, self.firstpageurl)
         except Exception as err:
-            logger.warning('Error retreiving first page %s' % err)
+            scrapelogger.warning('Error retreiving first page %s' % err)
             self.failed = True
 
-    def getGameElements(self,soup):
+    def getGameElements(self,soup,url):
         '''Get a list of soup elements (one for each game)'''
         games = soup
         try:
             for f in self.gamelistsoup['funcs']:
                 games = f(games)
-                logger.debug(games)
+                scrapelogger.debug(games)
         except Exception as err:
-            logger.warning('Failed to get game element list for %s: Error: "%s" ' % (self.url, err))
+            scrapelogger.warning('Failed to get game element list for %s: Error: "%s" ' % (url, err))
         return games
 
     def parsePage(self,soup,url):
         elemnr = -1
-        for game in self.getGameElements(soup):
+        for game in self.getGameElements(soup, url):
             elemnr += 1
             data = {}
             try:
                 for dtype in ('name', 'stock', 'price'):
-                    logger.debug('Deriving: "%s"' % (dtype))
+                    scrapelogger.debug('Deriving: "%s"' % (dtype))
                     gametypesoup = game
 
                     for f in self.gamesoup[dtype]['funcs']:
                         gametypesoup =  f(gametypesoup)
-                        logger.debug('Derived "%s"' % (gametypesoup))
+                        scrapelogger.debug('Derived "%s"' % (gametypesoup))
 
                     data[dtype] = gametypesoup
 
             except Exception as err:
-                logger.warning('Error in parsing type:"%s" Error:"%s";\n Game element nr %d: >>> %s <<<; Error: "%s"; Url:"%s"\n' % (dtype, err, elemnr, game, err, url))
+                scrapelogger.warning('Error in parsing inside type:"%s" Error:"%s;";\n\
+                        Game element nr %d: >>> %s <<<; Error: "%s"; Url:"%s"\n' % (dtype, err, elemnr, game, err, url))
                 self.nrerrors +=1
                 continue
 
             game = GameItem(**data)
-            print(game)
+            scrapelogger.info(game)
             self.games.append(game)
             self.nrparsed +=1
 
     def setpgmaxnr(self):
         for f in self.pagemaxnr['funcs']:
-
             self.firstpage = f(self.firstpage)
         self.pgmaxnr = self.firstpage
         assert(type(self.pgmaxnr) == int)
@@ -118,5 +119,6 @@ class GenericScraper():
     def parsePages(self):
         for pagenr in range(self.startpagenr,self.pgmaxnr):
             url = self.url % pagenr # "http://example.com&page=%d"
+            scrapelogger.debug("Starting parse of page nr:%d with url '%s'" % (pagenr, url))
             soup = getpagesoup(url)
             self.parsePage(soup, url)

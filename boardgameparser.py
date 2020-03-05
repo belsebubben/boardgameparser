@@ -49,21 +49,22 @@ from  bglib.httpbplate import *
 import stores
 
 # debugging
-debug = False
+debug = True
 
 # logging
 import logging
 import traceback
-LOGFORMAT = "%(asctime)s %(levelname)s: line:%(lineno)d  func:%(funcName)s;  %(message)s"
-bgparselogger = logging.StreamHandler(stream=sys.stderr)
+LOGFORMAT = "%(asctime)s %(levelname)s: %(pathname)s line:%(lineno)d func:%(funcName)s; %(message)s exception:%(exc_info)s"
 logger = logging.getLogger('root')
-logger.addHandler(bgparselogger)
+bgparselogger = logging.StreamHandler(stream=sys.stderr)
 if debug:
-    logger.setLevel(logging.DEBUG)
+    bgparselogger.setLevel(logging.DEBUG)
 else:
-    logger.setLevel(logging.INFO)
+    bgparselogger.setLevel(logging.INFO)
 logformatter = logging.Formatter(LOGFORMAT)
 bgparselogger.setFormatter(logformatter)
+logger.addHandler(bgparselogger)
+logger.debug("Debugging enabled!")
 
 
 filterlistfile = 'filterlist'
@@ -133,8 +134,7 @@ def webhallenGamelist():
         html = html.encode("UTF-8")
         soup = getUrlSoupData(html, "UTF-8")
         gamelist.extend(parseWebhallenGames(soup))
-        if debug:
-            print(html)
+        logger.debug("html: '%s'" % str(html))
 
 
     driver.close()
@@ -222,28 +222,32 @@ def genWishlist():
 
 
 def save_gameProducts(stores):
-    #for store,gamelist in stores.items():
-    for store in stores.__all__:
+    #for store in stores.__all__:
+    for store in ("AlphaSpel",): # debug testing
+        logger.info("Starting parsing of '%s'" % store)
         shop, created = Shop.objects.update_or_create(defaults={"name": store, "scrapetime": int(time.time())}, name=store)
 
         try:
             storeobj = getattr(stores, store)()
         except:
-            print("Store %s failed to initialize" % store)
+            logger.warning("Store %s failed to initialize" % store)
             raise
         if not created:
             shop.save()
         # else: Shop.save(update_fields=['updated'])
         for game in storeobj.games:
-            logger.debug("saving game: ", game)
-            print("!!!!!!! saving game: ", game)
+            logger.debug("Saving game: '%s' " % str(game))
             game_name = game.name.replace("\n", "", -1)
             game_name = game_name.strip()
             game_name = " ".join(game_name.split())
-            g, created = GameProduct.objects.update_or_create(name=game_name, shop=shop, defaults={"stock": game.stock, "price": game.price})
-            g.save()
+            try:
+                g, created = GameProduct.objects.update_or_create(name=game_name, shop=shop,\
+                        defaults={"stock": game.stock, "price": game.price, "name": game_name})
+                g.save()
+            except Exception as err:
+                logger.warning("Failed to save product '%s'; '%s'", (str(game), err))
 
-def getStoreData():
+#def getStoreData():
     # Stores todo ( spelexperten, midgård games, storochliten, http://www.unispel.com,  www.spelochsant.se )
     #stores = {}
     #stores["Alphaspel"] = alphaGamelist()
@@ -253,7 +257,7 @@ def getStoreData():
     #stores["RetroSpelbutiken"] = retrospelbutikenGamelist()
     #stores["Playoteket"] = playoteketGamelist()
     #stores["Webhallen"] = webhallenGamelist()
-    return stores.__all__
+    #return stores.__all__
 
 def main():
     #stores = getStoreData()
@@ -270,7 +274,7 @@ def main():
     save_gameProducts(stores)
     #wishlist = genWishlist() # make a collector function
 
-    matchGamesWithWishes()
+    #matchGamesWithWishes()
 
 if __name__ == "__main__":
     #application = get_wsgi_application()

@@ -2,6 +2,7 @@ __pycache__
 geckodriver.log
 tmp/*
 bgs/migrations/*
+*.swp
 tmp
 db.sqlite3
 bgindex/db.sqlite3

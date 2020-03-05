@@ -57,12 +57,14 @@ import traceback
 LOGFORMAT = "%(asctime)s %(levelname)s: %(pathname)s line:%(lineno)d func:%(funcName)s; %(message)s exception:%(exc_info)s"
 logger = logging.getLogger('root')
 bgparselogger = logging.StreamHandler(stream=sys.stderr)
-if debug:
-    bgparselogger.setLevel(logging.DEBUG)
-else:
-    bgparselogger.setLevel(logging.INFO)
 logformatter = logging.Formatter(LOGFORMAT)
 bgparselogger.setFormatter(logformatter)
+if debug:
+    #bgparselogger.setLevel(logging.DEBUG)
+    logging.root.setLevel(logging.DEBUG)
+else:
+    #bgparselogger.setLevel(logging.INFO)
+    logging.root.setLevel(logging.INFO)
 logger.addHandler(bgparselogger)
 logger.debug("Debugging enabled!")
 
@@ -226,6 +228,7 @@ def save_gameProducts(stores):
     for store in ("AlphaSpel",): # debug testing
         logger.info("Starting parsing of '%s'" % store)
         shop, created = Shop.objects.update_or_create(defaults={"name": store, "scrapetime": int(time.time())}, name=store)
+        logger.info("Object '%s'" % str(shop.__dict__))
 
         try:
             storeobj = getattr(stores, store)()

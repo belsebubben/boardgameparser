@@ -59,6 +59,7 @@ class GenericScraper():
         self.failed = False
         self.nrerrors = 0
         self.nrparsed = 0
+        self.pgstep = 1
         self.parsefirstpage()
         self.setpgmaxnr()
         self.parsePages()
@@ -111,14 +112,21 @@ class GenericScraper():
             self.nrparsed +=1
 
     def setpgmaxnr(self):
+        if not self.pagemaxnr: # Set this to False in parser to skip
+            return
         for f in self.pagemaxnr['funcs']:
             self.firstpage = f(self.firstpage)
         self.pgmaxnr = self.firstpage
         assert(type(self.pgmaxnr) == int)
 
+    def pageRanger(self):
+        return [x for x in range(self.startpagenr,self.pgmaxnr,self.pgstep)]
+
+    def urlmaker(self):
+        return [self.url % pagenr for pagenr in self.pageRanger()] # "http://example.com&page=%d"
+
     def parsePages(self):
-        for pagenr in range(self.startpagenr,self.pgmaxnr):
-            url = self.url % pagenr # "http://example.com&page=%d"
-            scrapelogger.debug("Starting parse of page nr:%d with url '%s'" % (pagenr, url))
+        for url in self.urlmaker():
+            scrapelogger.debug("Starting parse of page with url '%s'" % url)
             soup = getpagesoup(url)
             self.parsePage(soup, url)

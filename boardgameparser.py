@@ -55,7 +55,7 @@ from bglib.httpbplate import *
 import stores
 
 # debugging
-debug = True
+debug = False
 
 # logging
 import logging
@@ -93,6 +93,61 @@ WEBHALLENURL = (
 # game, wishlist, shop
 
 # end Database stuff
+
+def parse_args():
+    global debug
+    parser = argparse.ArgumentParser(
+        epilog=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        dest="debug",
+        action="store_true",
+        help="Enable debug",
+        default=False,
+    )
+    parser.add_argument(
+        "-w",
+        "--wishlist",
+        dest="wishlist",
+        action="store_true",
+        default=False,
+        help="Fetch wishlist from boardgamegeek (wishlist account)",
+    )
+    parser.add_argument(
+        "-c",
+        "--compare",
+        dest="compare",
+        action="store_true",
+        default=False,
+        help="Compare wishlist and store items",
+    )
+    parser.add_argument(
+        "-l", "--list", dest="liststores", action="store_true", help="List stores", default=False
+    )
+    parser.add_argument(
+        "-p",
+        "--parsestore",
+        dest="parsestore",
+        help="Parse store <storename>",
+        default=False,
+    )
+    parser.add_argument(
+        "-P",
+        "--parseallstores",
+        dest="parseallstore",
+        action="store_true",
+        help="Parse all stores",
+        default=False,
+    )
+
+    args = parser.parse_args()
+    if args.debug:
+        debug = args.debug
+        print("Debugging enabled")
+    return args, parser
+
 
 # Webhallen
 def parseWebhallenGames(soup):
@@ -255,20 +310,22 @@ def genWishlist():
 
 
 def save_gameProducts(storename=False):
+    global stores
+    allstores = stores.__all__
     if storename: # only parse this _one_
-        stores = (getattr(stores, storename)(),)
-    for store in stores:
-    #for store in ("WorldOfBoardGames",):  # debug testing
-        logger.info("Starting parsing of '%s'" % store)
+        allstores = [stores.__all__[stores.__all__.index(storename)]]
+
+    for storename in allstores:
+        logger.info("Starting parsing of '%s'" % storename)
         shop, created = Shop.objects.update_or_create(
-            defaults={"name": store, "scrapetime": int(time.time())}, name=store
+            defaults={"name": storename, "scrapetime": int(time.time())}, name=storename
         )
         logger.info("Object '%s'" % str(shop.__dict__))
 
         try:
-            storeobj = getattr(stores, store)()
+            storeobj = getattr(stores, storename)()
         except:
-            logger.warning("Store %s failed to initialize" % store)
+            logger.warning("Store %s failed to initialize" % storename)
             raise
         if not created:
             shop.save()
@@ -305,61 +362,6 @@ def getStoreData():
     # F = FirstPlayer()
     # G = GamesMania()
     return stores.__all__
-
-
-def parse_args():
-    global debug
-    parser = argparse.ArgumentParser(
-        epilog=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
-    )
-    parser.add_argument(
-        "-d",
-        "--debug",
-        dest="debug",
-        action="store_true",
-        help="Enable debug",
-        default=False,
-    )
-    parser.add_argument(
-        "-w",
-        "--wishlist",
-        dest="wishlist",
-        action="store_true",
-        default=False,
-        help="Fetch wishlist from boardgamegeek (wishlist account)",
-    )
-    parser.add_argument(
-        "-c",
-        "--compare",
-        dest="compare",
-        action="store_true",
-        default=False,
-        help="Compare wishlist and store items",
-    )
-    parser.add_argument(
-        "-l", "--list", dest="liststores", action="store_true", help="List stores", default=False
-    )
-    parser.add_argument(
-        "-p",
-        "--parsestore",
-        dest="parsestore",
-        help="Parse store <storename>",
-        default=False,
-    )
-    parser.add_argument(
-        "-P",
-        "--parseallstores",
-        dest="parseallstore",
-        action="store_true",
-        help="Parse all stores",
-        default=False,
-    )
-
-    args = parser.parse_args()
-    if args.debug:
-        debug = args.debug
-        print("Debugging enabled")
-    return args, parser
 
 
 def main():

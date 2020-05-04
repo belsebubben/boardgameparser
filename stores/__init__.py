@@ -8,8 +8,9 @@ from .playoteket import Playoteket
 from .fourgames import FourGames
 from .firstplayer import FirstPlayer
 from .gamesmania import GamesMania
+from .spelexperten import Spelexperten
 __all__ = ['AlphaSpel', 'DragonsLair',\
         'WorldOfBoardGames', 'AlltPaEttkort',\
         'RetroSpelButiken', 'Playoteket',\
         'FourGames', 'FirstPlayer',\
-        'GamesMania']
+        'GamesMania', 'Spelexperten']

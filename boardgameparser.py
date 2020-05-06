@@ -170,13 +170,20 @@ def parse_args():
         help="Parse all stores",
         default=False,
     )
-
     parser.add_argument(
         "-s",
         "--stock",
         dest="stocktrue",
         action="store_true",
         help="Only show entries where in stock",
+        default=False,
+    )
+    parser.add_argument(
+        "-S",
+        "--store",
+        dest="store",
+        type=str,
+        help="Only specific store",
         default=False,
     )
 
@@ -256,9 +263,8 @@ def soupExtractor(soup, extractions):
 
 def compareGameandWishTitle(wishname,allgames,filterwords,args):
     wishname = wishname.casefold()
-    print("\nGame: %s" % (wishname))
-    found = 0
     foundgames = []
+    #Loop over games and try to match with wishname
     for game in allgames:
         gamename = game.name.casefold()
 
@@ -290,11 +296,15 @@ def compareGameandWishTitle(wishname,allgames,filterwords,args):
         if (matchRatio > args.matchratio and len(game.name.split(" ")) > 1) or (
             matchRatio > args.matchratio + 5 and len(game.name.split(" ")) == 1
         ):
-            found += 1
             foundgames.append((game,matchRatio))
-    if found < 1:
+
+    # Print the results here
+    if len(foundgames) < 1 and args.stocktrue == False:
+        print("\nGame: %s" % (wishname))
         print("No products found!\n")
-    else:
+
+    if len(foundgames) > 0:
+        print("\nGame: %s" % (wishname))
         for entry in foundgames:
             game, matchRatio = entry
             print(
@@ -304,18 +314,20 @@ def compareGameandWishTitle(wishname,allgames,filterwords,args):
             print("\tMatch ratio: %s; %s ---> %s\n" % (matchRatio, wishname, game.name))
     
 
-
-
 def matchGamesWithWishes(args):
 
     # todo show unmatched wishes
     # todo show lowest price
 
+    allgames = GameProduct.objects.filter()
+
     # If we want products only in stock
     if args.stocktrue:
-        allgames = GameProduct.objects.filter(stock=True)
-    else:
-        allgames = GameProduct.objects.filter()
+        allgames = allgames.filter(stock=True)
+    
+    if args.store:
+        shopid = Shop.objects.filter(name=args.store).get().id
+        allgames = allgames.filter(shop_id=shopid)
 
     # Initialize words that we want to filter out when comparing
     with open(filterlistfile) as flfile:

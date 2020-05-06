@@ -94,6 +94,11 @@ WEBHALLENURL = (
 
 # end Database stuff
 
+def nullable_string(val):
+    if not val:
+        return None
+    return val
+
 def parse_args():
     global debug
     parser = argparse.ArgumentParser(
@@ -123,8 +128,9 @@ def parse_args():
         default=False,
         help="Print wishlist",
     )
+
     parser.add_argument(
-        "-c",
+        "-C",
         "--compare",
         dest="compare",
         action="store_true",
@@ -132,12 +138,11 @@ def parse_args():
         help="Compare wishlist and store items",
     )
     parser.add_argument(
-        "-C",
+        "-c",
         "--compare-product",
         dest="compareproduct",
         type=str,
-        default=False,
-        help="Compare free form string with store items get wishes with --wishlistprint",
+        help="Compare free form string with store items get wishes with --wishlistprint, If 'wishes' compare whole wishlist",
     )
     parser.add_argument(
         "-m",
@@ -163,6 +168,15 @@ def parse_args():
         dest="parseallstores",
         action="store_true",
         help="Parse all stores",
+        default=False,
+    )
+
+    parser.add_argument(
+        "-s",
+        "--stock",
+        dest="stocktrue",
+        action="store_true",
+        help="Only show entries where in stock",
         default=False,
     )
 
@@ -240,72 +254,87 @@ def soupExtractor(soup, extractions):
     pass
 
 
-def compareGameandWishTitle(wishname):
-    pass
+def compareGameandWishTitle(wishname,allgames,filterwords,args):
+    wishname = wishname.casefold()
+    print("\nGame: %s" % (wishname))
+    found = 0
+    foundgames = []
+    for game in allgames:
+        gamename = game.name.casefold()
+
+        # handle filterwords - if we explicitly have these in our wish then dont filter them out
+        for word in filterwords:
+            gamename = gamename.replace(word, "")
+            # print('replaced %s !!!!!!!!!!!!!!!!!!!' % word, gamename)
+
+        # matchRatio = fuzz.WRatio(game.name, wish.name)
+        # matchRatio = fuzz.partial_ratio(game.name, wish.name)
+        # matchRatio = fuzz.token_sort_ratio(game.name, wish.name)
+        matchRatio = fuzz.ratio(gamename, wishname)
+
+        # handle colons ':' (usually implies expansion or other item)
+        if (":" in gamename and not ":" in wishname) or (
+            ":" in wishname and not ":" in gamename
+        ):
+            matchRatio -= 5
+
+        # handle expansions explicitly
+        if ("exp" in gamename.lower() and not "exp" in wishname.lower()) or (
+            "exp" in wishname.lower() and not "exp" in gamename
+        ):
+            matchRatio -= 5
+
+
+        logger.debug("Matching: %s with %s" % (wishname, game.name))
+        # todo . examine different ratios depending on nr of words in product
+        if (matchRatio > args.matchratio and len(game.name.split(" ")) > 1) or (
+            matchRatio > args.matchratio + 5 and len(game.name.split(" ")) == 1
+        ):
+            found += 1
+            foundgames.append((game,matchRatio))
+    if found < 1:
+        print("No products found!\n")
+    else:
+        for entry in foundgames:
+            game, matchRatio = entry
+            print(
+                "%s:\n\tStore: %s\n\tStock: %s\n\tPrice: %s"
+                % (game.name, game.shop.name, game.stock, game.price)
+            )
+            print("\tMatch ratio: %s; %s ---> %s\n" % (matchRatio, wishname, game.name))
+    
+
+
 
 def matchGamesWithWishes(args):
 
     # todo show unmatched wishes
     # todo show lowest price
 
-    # allgames = GameProduct.objects.filter(stock=True)
-    allgames = GameProduct.objects.filter()
-    if args.compareproduct:
-        wishobjects = Wishlist.objects.filter(id=args.compareproduct)
+    # If we want products only in stock
+    if args.stocktrue:
+        allgames = GameProduct.objects.filter(stock=True)
     else:
-        wishobjects = Wishlist.objects.all()
+        allgames = GameProduct.objects.filter()
 
+    # Initialize words that we want to filter out when comparing
     with open(filterlistfile) as flfile:
         filterwords = [l.strip() for l in flfile.readlines()]
 
-    for wish in wishobjects:
-        wishname = wish.name.lower()
-        wishmatch = False
-        for game in allgames:
-            gamename = game.name.lower()
+    if args.compareproduct:
+        compareGameandWishTitle(args.compareproduct,allgames,filterwords,args)
+    else:
+        wishobjects = Wishlist.objects.all()
 
-
-            # handle filterwords - if we explicitly have these in our wish then dont filter them out
-            for word in filterwords:
-                gamename = gamename.replace(word, "")
-                # print('replaced %s !!!!!!!!!!!!!!!!!!!' % word, gamename)
-
-            # matchRatio = fuzz.WRatio(game.name, wish.name)
-            # matchRatio = fuzz.partial_ratio(game.name, wish.name)
-            # matchRatio = fuzz.token_sort_ratio(game.name, wish.name)
-            matchRatio = fuzz.ratio(gamename, wishname)
-
-            # handle colons ':' (usually implies expansion or other item)
-            if (":" in gamename and not ":" in wishname) or (
-                ":" in wishname and not ":" in gamename
-            ):
-                matchRatio -= 5
-
-            # handle expansions explicitly
-            if ("exp" in gamename.lower() and not "exp" in wishname.lower()) or (
-                "exp" in wishname.lower() and not "exp" in gamename
-            ):
-                matchRatio -= 5
-
-
-            logger.debug("Matching: %s with %s" % (wish.name, game.name))
-            # todo . examine different ratios depending on nr of words in product
-            if (matchRatio > args.matchratio and len(game.name.split(" ")) > 1) or (
-                matchRatio > args.matchratio + 5 and len(game.name.split(" ")) == 1
-            ):
-                if not wishmatch:
-                    print("\nGame: %s" % (wish.name))
-                    wishmatch = True
-                print(
-                    "\t%s:\n\tStore: %s\n\tStock: %s\n\tPrice: %s"
-                    % (game.name, game.shop.name, game.stock, game.price)
-                )
-                print("Match ratio: %s; %s ---> %s" % (matchRatio, wishname, gamename))
+        for wish in wishobjects:
+            wishname = wish.name.casefold()
+            compareGameandWishTitle(wishname,allgames,filterwords,args)
 
 
 def genWishlist():
     # todo make it wait for the request to generate
     wishes = []
+    Wishlist.objects.all().delete()
     for want, wantname in WISHDICT.items():
         wishurl = WISHURL + want
 
@@ -389,13 +418,11 @@ def getStoreData():
 
 def printWishlist():
     for wish in Wishlist.objects.all():
-        print(wish.id, "\t", wish.name)
+        print(wish.priority, "\t", wish.name)
 
 def main():
     args, parser = parse_args()
-    if args.compare:
-        matchGamesWithWishes(args)
-    if args.compareproduct:
+    if args.compareproduct or args.compare:
         matchGamesWithWishes(args)
     if args.wishlist:
         genWishlist()  # make a collector function

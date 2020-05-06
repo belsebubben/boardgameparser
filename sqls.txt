@@ -1,0 +1,9 @@
+#Select one game join with shop
+SELECT bgs_gameproduct.name,bgs_gameproduct.price,bgs_shop.name from bgs_gameproduct,bgs_shop  WHERE bgs_gameproduct.name LIKE '%Myrmes%' AND bgs_shop.id == bgs_gameproduct.shop_id;
+
+# Select all products from one shop
+SELECT bgs_gameproduct.name,bgs_gameproduct.price,bgs_shop.name from bgs_gameproduct,bgs_shop  WHERE bgs_gameproduct.shop_id == 16 AND bgs_shop.id == bgs_gameproduct.shop_id;
+
+
+# How many games from shop id 14
+SELECT count(bgs_gameproduct.name) FROM bgs_gameproduct WHERE bgs_gameproduct.shop_id == 14;

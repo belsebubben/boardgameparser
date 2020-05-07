@@ -56,7 +56,7 @@ def getpagesoup(url):
 class GenericScraper():
     def __init__(self):
         self.games = []
-        self.failed = False
+        self.failed = 0
         self.nrerrors = 0
         self.nrparsed = 0
         self.pgstep = 1
@@ -71,7 +71,7 @@ class GenericScraper():
             self.parsePage(self.firstpage, self.firstpageurl)
         except Exception as err:
             scrapelogger.warning('Error retreiving first page %s' % err)
-            self.failed = True
+            self.failed +=1
 
     def getGameElements(self,soup,url):
         '''Get a list of soup elements (one for each game)'''
@@ -82,6 +82,7 @@ class GenericScraper():
                 scrapelogger.debug(games)
         except Exception as err:
             scrapelogger.warning('Failed to get game element list for %s: Error: "%s" ' % (url, err))
+            self.failed +=1
         return games
 
     def parsePage(self,soup,url):
@@ -101,6 +102,7 @@ class GenericScraper():
                     data[dtype] = gametypesoup
 
             except Exception as err:
+                self.failed +=1
                 scrapelogger.warning('Error in parsing inside type:"%s" Error:"%s;";\n\
                         Game element nr %d: >>> %s <<<; Error: "%s"; Url:"%s"\n' % (dtype, err, elemnr, game, err, url))
                 self.nrerrors +=1

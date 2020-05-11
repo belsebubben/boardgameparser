@@ -39,6 +39,7 @@ import django
 sys.path.append("/home/carl/Code/boardgameparser")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "bgindex.settings")
 from django.core.wsgi import get_wsgi_application
+from django.template import Template, Context
 
 django.setup()
 # end django settings
@@ -128,7 +129,6 @@ def parse_args():
         default=False,
         help="Print wishlist",
     )
-
     parser.add_argument(
         "-C",
         "--compare",
@@ -136,6 +136,14 @@ def parse_args():
         action="store_true",
         default=False,
         help="Compare wishlist and store items",
+    )
+    parser.add_argument(
+        "-H",
+        "--html",
+        dest="html",
+        action="store_true",
+        default=False,
+        help="html output",
     )
     parser.add_argument(
         "-c",
@@ -164,8 +172,8 @@ def parse_args():
     )
     parser.add_argument(
         "-P",
-        "--parseallstores",
-        dest="parseallstores",
+        "--scrape",
+        dest="scrape",
         action="store_true",
         help="Parse all stores",
         default=False,
@@ -260,9 +268,31 @@ def webhallenGamelist():
 def soupExtractor(soup, extractions):
     pass
 
+def matchPrinter(wishmatches, args):
+    for wishmatch,foundgames in wishmatches.items():
+
+        if len(foundgames) < 1 and args.stocktrue == False:
+            if not args.html:
+                print("\nGame: %s" % (wishname))
+                print("No products found!\n")
+
+        if len(foundgames) > 0:
+            if not args.html:
+                print("\nGame: %s" % (wishname))
+                for entry in foundgames:
+                    game, matchRatio = entry
+                    print(
+                        "%s:\n\tStore: %s\n\tStock: %s\n\tPrice: %s"
+                        % (game.name, game.shop.name, game.stock, game.price)
+                    )
+                    print("\tMatch ratio: %s; %s ---> %s\n" % (matchRatio, wishname, game.name))
+    
+    if args.html:
+        template = Template(open("comparison.j2").read())
+        context = Context(locals())
+        print(template.render(context))
 
 def compareGameandWishTitle(wishname,allgames,filterwords,args):
-    wishname = wishname.casefold()
     foundgames = []
     #Loop over games and try to match with wishname
     for game in allgames:
@@ -276,7 +306,7 @@ def compareGameandWishTitle(wishname,allgames,filterwords,args):
         # matchRatio = fuzz.WRatio(game.name, wish.name)
         # matchRatio = fuzz.partial_ratio(game.name, wish.name)
         # matchRatio = fuzz.token_sort_ratio(game.name, wish.name)
-        matchRatio = fuzz.ratio(gamename, wishname)
+        matchRatio = fuzz.ratio(gamename, wishname.casefold())
 
         # handle colons ':' (usually implies expansion or other item)
         if (":" in gamename and not ":" in wishname) or (
@@ -285,11 +315,10 @@ def compareGameandWishTitle(wishname,allgames,filterwords,args):
             matchRatio -= 5
 
         # handle expansions explicitly
-        if ("exp" in gamename.lower() and not "exp" in wishname.lower()) or (
-            "exp" in wishname.lower() and not "exp" in gamename
+        if ("exp" in gamename and not "exp" in wishname) or (
+            "exp" in wishname.casefold() and not "exp" in gamename
         ):
             matchRatio -= 5
-
 
         logger.debug("Matching: %s with %s" % (wishname, game.name))
         # todo . examine different ratios depending on nr of words in product
@@ -297,29 +326,13 @@ def compareGameandWishTitle(wishname,allgames,filterwords,args):
             matchRatio > args.matchratio + 5 and len(game.name.split(" ")) == 1
         ):
             foundgames.append((game,matchRatio))
+    return foundgames
 
-    # Print the results here
-    if len(foundgames) < 1 and args.stocktrue == False:
-        print("\nGame: %s" % (wishname))
-        print("No products found!\n")
-
-    if len(foundgames) > 0:
-        print("\nGame: %s" % (wishname))
-        for entry in foundgames:
-            game, matchRatio = entry
-            print(
-                "%s:\n\tStore: %s\n\tStock: %s\n\tPrice: %s"
-                % (game.name, game.shop.name, game.stock, game.price)
-            )
-            print("\tMatch ratio: %s; %s ---> %s\n" % (matchRatio, wishname, game.name))
-    
 
 def matchGamesWithWishes(args):
-
-    # todo show unmatched wishes
     # todo show lowest price
-
     allgames = GameProduct.objects.filter()
+    wishmatches = {}
 
     # If we want products only in stock
     if args.stocktrue:
@@ -334,13 +347,16 @@ def matchGamesWithWishes(args):
         filterwords = [l.strip() for l in flfile.readlines()]
 
     if args.compareproduct:
-        compareGameandWishTitle(args.compareproduct,allgames,filterwords,args)
+        foundgames = compareGameandWishTitle(args.compareproduct,allgames,filterwords,args)
     else:
         wishobjects = Wishlist.objects.all()
-
+        # loop over all wishes and compare with games
         for wish in wishobjects:
-            wishname = wish.name.casefold()
-            compareGameandWishTitle(wishname,allgames,filterwords,args)
+            foundgames = compareGameandWishTitle(wish.name,allgames,filterwords,args)
+            wishmatches[wish.name] = foundgames
+
+    # Print the results here
+    matchPrinter(wishmatches, args)
 
 
 def genWishlist():
@@ -383,11 +399,12 @@ def genWishlist():
     return wishes
 
 
-def save_gameProducts(storename=False):
+def save_gameProducts(args):
     global stores
     allstores = stores.__all__
-    if storename: # only parse this _one_
-        allstores = [stores.__all__[stores.__all__.index(storename)]]
+
+    if args.storename: # only parse this _one_
+        allstores = [stores.__all__[stores.__all__.index(args.storename)]]
 
     for storename in allstores:
         logger.info("Starting parsing of '%s'" % storename)
@@ -440,13 +457,9 @@ def main():
         genWishlist()  # make a collector function
     if args.liststores:
         print(getStoreData())
-    if args.parsestore:
-        stores = getStoreData()
-        print("Parsing store %s" % (args.parsestore))
-        save_gameProducts(args.parsestore)
-    if args.parseallstores:
-        print("Parsing all stores")
-        save_gameProducts()
+    if args.scrape:
+        print("Scraping")
+        save_gameProducts(args)
     if args.wishlistprint:
         printWishlist()
     sys.exit(0)

@@ -1,0 +1,46 @@
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<title>Welcome.</title>
+
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" type="text/css" href="file:///home/carl/Code/mymanpages/webdesign/html5/tables/multi_tbody_and_thead.html">
+</head>
+
+<body>
+<h3> Game wishes </h3>
+
+{% for wish,gameentries in wishmatches.items %}
+{% if gameentries|length < 1 and args.stocktrue == False %}
+{{ wish }} :( None found
+{% else %}
+{% if gameentries|length > 0 %}
+<h4>{{ wish }}</h4>
+<table>
+<thead class="table_head">
+<tr>
+<th>Name</th>
+<th>Price</th>
+<th>Stock</th>
+<th>Store</th>
+<th>Match %</th>
+</tr>
+</thead>
+<tbody>
+{% for gameentry,matchratio in gameentries %}
+	<tr class="{% cycle 'odd' 'even' %}" >
+	<td>{{ gameentry.name }}</td>
+	<td>{{ gameentry.price }}</td>
+	<td>{{ gameentry.stock }}</td>
+	<td>{{ gameentry.shop.name }}</td>
+	<td>{{ matchratio }}</td>
+	</tr>
+{% endfor %}
+</tbody>
+</table>
+<br>
+{% endif %}
+{% endif %}
+{% endfor %}
+
+</body>
+</html>

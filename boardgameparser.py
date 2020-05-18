@@ -273,19 +273,19 @@ def matchPrinter(wishmatches, args):
 
         if len(foundgames) < 1 and args.stocktrue == False:
             if not args.html:
-                print("\nGame: %s" % (wishname))
+                print("\nGame: %s" % (wismatch))
                 print("No products found!\n")
 
         if len(foundgames) > 0:
             if not args.html:
-                print("\nGame: %s" % (wishname))
+                print("\nGame: %s" % (wishmatch))
                 for entry in foundgames:
                     game, matchRatio = entry
                     print(
                         "%s:\n\tStore: %s\n\tStock: %s\n\tPrice: %s"
                         % (game.name, game.shop.name, game.stock, game.price)
                     )
-                    print("\tMatch ratio: %s; %s ---> %s\n" % (matchRatio, wishname, game.name))
+                    print("\tMatch ratio: %s; %s ---> %s\n" % (matchRatio, wishmatch, game.name))
     
     if args.html:
         template = Template(open("comparison.j2").read())
@@ -348,6 +348,7 @@ def matchGamesWithWishes(args):
 
     if args.compareproduct:
         foundgames = compareGameandWishTitle(args.compareproduct,allgames,filterwords,args)
+        wishmatches[args.compareproduct] = compareGameandWishTitle(args.compareproduct,allgames,filterwords,args)
     else:
         wishobjects = Wishlist.objects.all()
         # loop over all wishes and compare with games
